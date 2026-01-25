@@ -5,6 +5,7 @@ import { GeneratedContent, ThoughtMeta, ThoughtCategory, NextStep, ThoughtCard, 
 
 const TEXT_MODEL = "gemini-3-flash-preview";
 const IMAGE_MODEL = "gemini-3-pro-image-preview"; 
+const API_TIMEOUT_MS = 20000; // 20 seconds max wait
 
 interface AnalysisResponse {
   emotion: string;
@@ -24,10 +25,17 @@ interface WateringResponse {
   nextStep: NextStep | null;
 }
 
-// Helper for retry logic with exponential backoff
-async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+// Helper for retry logic with exponential backoff and Timeout
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Promise<T> {
   try {
-    return await fn();
+    // Create a timeout promise
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("Request timed out - the garden is slow today.")), API_TIMEOUT_MS)
+    );
+
+    // Race the function against the timeout
+    return await Promise.race([fn(), timeoutPromise]);
+
   } catch (error: any) {
     const isOverloaded = 
       error?.status === 503 || 
@@ -43,10 +51,29 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000)
   }
 }
 
+// Helper to get client safely
+const getClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please select a key in the settings or startup screen.");
+  }
+  return new GoogleGenAI({ apiKey });
+}
+
 export const generateMindGardenContent = async (text: string): Promise<GeneratedContent> => {
   try {
+    // 1. Analyze Text (Critical)
     const analysis = await analyzeTextAndReflect(text);
-    const imageUrl = await generateSymbolicImage(analysis.metaphors, analysis.emotion);
+
+    // 2. Generate Image (Non-Critical - Fallback if fails)
+    let imageUrl = "";
+    try {
+      imageUrl = await generateSymbolicImage(analysis.metaphors, analysis.emotion);
+    } catch (imgError) {
+      console.warn("Image generation failed, using fallback:", imgError);
+      // Fallback abstract image based on emotion color if possible, or generic
+      imageUrl = `https://picsum.photos/seed/${Date.now()}/800/800?blur=4`; 
+    }
 
     return {
       imageUrl,
@@ -59,7 +86,7 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
         topic: analysis.topic,
         hasNextStep: analysis.hasNextStep,
         nextStep: analysis.nextStep,
-        intent: analysis.hasNextStep ? 'action' : 'rest' // inferred
+        intent: analysis.hasNextStep ? 'action' : 'rest'
       },
     };
   } catch (error: any) {
@@ -67,13 +94,12 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
     if (error.message?.includes('overloaded') || error.status === 503) {
        throw new Error("The garden is very busy right now. Please try again in a moment.");
     }
-    throw new Error("The garden is cloudy right now. Please try again later.");
+    throw error; // Propagate to UI
   }
 };
 
 export const waterMindGardenThought = async (thought: ThoughtCard, updateText: string): Promise<WateringResponse> => {
-  // Instantiate client here to ensure fresh API key and avoid global scope issues
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getClient();
 
   const prompt = `
     You are the MindGarden AI.
@@ -134,8 +160,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
 };
 
 async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse> {
-  // Instantiate client locally
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getClient();
 
   const prompt = `
     You are the MindGarden AI. Your goal is to be a sanctuary, not a task manager.
@@ -216,8 +241,7 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
 }
 
 async function generateSymbolicImage(metaphors: string[], emotion: string): Promise<string> {
-  // Instantiate client locally
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getClient();
 
   const imagePrompt = `
     A soft, dreamlike watercolor illustration representing: ${metaphors.join(", ")} and the feeling of ${emotion}.
@@ -264,7 +288,7 @@ async function generateSymbolicImage(metaphors: string[], emotion: string): Prom
   }
 
   if (!imageUrl) {
-    return `https://picsum.photos/500/500?blur=5&grayscale`;
+    throw new Error("No image data returned from model");
   }
 
   return imageUrl;
