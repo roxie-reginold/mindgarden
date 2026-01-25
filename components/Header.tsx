@@ -1,13 +1,14 @@
 import React from 'react';
-import { Grid, Map } from 'lucide-react';
+import { Grid, Map, Settings } from 'lucide-react';
 import { AppView } from '../types';
 
 interface HeaderProps {
   currentView: AppView;
   setView: (view: AppView) => void;
+  onSettingsClick: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, setView }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, setView, onSettingsClick }) => {
   return (
     <header className="fixed top-0 left-0 right-0 h-16 z-50 flex items-center justify-between px-6 md:px-12 bg-paper/90 backdrop-blur-md border-b border-stone-200/50 shadow-sm transition-all duration-300">
       
@@ -36,32 +37,43 @@ export const Header: React.FC<HeaderProps> = ({ currentView, setView }) => {
         </div>
       </div>
 
-      {/* Navigation Pills */}
-      <nav className="flex gap-1 bg-stone-100/50 p-1 rounded-full border border-stone-200/50">
-        <button
-          onClick={() => setView(AppView.GARDEN)}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${
-            currentView === AppView.GARDEN
-              ? 'bg-white text-stone-800 shadow-sm ring-1 ring-black/5'
-              : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
-          }`}
-        >
-          <Map size={14} />
-          <span className="hidden sm:inline">Garden</span>
-        </button>
+      <div className="flex items-center gap-3">
+        {/* Navigation Pills */}
+        <nav className="flex gap-1 bg-stone-100/50 p-1 rounded-full border border-stone-200/50">
+          <button
+            onClick={() => setView(AppView.GARDEN)}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${
+              currentView === AppView.GARDEN
+                ? 'bg-white text-stone-800 shadow-sm ring-1 ring-black/5'
+                : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
+            }`}
+          >
+            <Map size={14} />
+            <span className="hidden sm:inline">Garden</span>
+          </button>
 
+          <button
+            onClick={() => setView(AppView.LIST)}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${
+              currentView === AppView.LIST
+                ? 'bg-white text-stone-800 shadow-sm ring-1 ring-black/5'
+                : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
+            }`}
+          >
+            <Grid size={14} />
+            <span className="hidden sm:inline">Collection</span>
+          </button>
+        </nav>
+
+        {/* Settings Button */}
         <button
-          onClick={() => setView(AppView.LIST)}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${
-            currentView === AppView.LIST
-              ? 'bg-white text-stone-800 shadow-sm ring-1 ring-black/5'
-              : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
-          }`}
+          onClick={onSettingsClick}
+          className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-full transition-colors"
+          title="Storage Settings"
         >
-          <Grid size={14} />
-          <span className="hidden sm:inline">Collection</span>
+          <Settings size={20} />
         </button>
-      </nav>
+      </div>
     </header>
   );
 };

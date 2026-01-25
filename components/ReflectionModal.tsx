@@ -163,10 +163,31 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                     <div key={update.id} className="pl-4 border-l-2 border-amber-200 ml-2 relative">
                       <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-amber-300" />
                       <p className="text-stone-800 text-sm mb-2">"{update.text}"</p>
-                      <div className="bg-stone-50 p-3 rounded-lg text-sm text-stone-600 font-serif italic">
+                      
+                      {/* AI Acknowledgment */}
+                      <div className="bg-stone-50 p-3 rounded-lg text-sm text-stone-600 font-serif italic mb-2">
                         {update.aiResponse}
                       </div>
-                      <span className="text-[10px] text-stone-400 mt-1 block">
+
+                      {/* Historical Next Step */}
+                      {update.nextStep && (
+                        <div className={`
+                          flex items-start gap-2 p-2 rounded-lg border mb-1
+                          ${update.nextStep.type === 'do' ? 'bg-teal-50/50 border-teal-100' : ''}
+                          ${update.nextStep.type === 'clarify' ? 'bg-amber-50/50 border-amber-100' : ''}
+                          ${update.nextStep.type === 'reflect' ? 'bg-rose-50/50 border-rose-100' : ''}
+                        `}>
+                          <div className="mt-0.5"><NextStepIcon type={update.nextStep.type} /></div>
+                          <p className="text-xs text-stone-600">
+                            <span className="font-semibold text-stone-500 uppercase tracking-wider text-[10px] mr-1 opacity-70">
+                              Suggestion:
+                            </span>
+                            {update.nextStep.text}
+                          </p>
+                        </div>
+                      )}
+
+                      <span className="text-[10px] text-stone-400 block">
                         {new Date(update.timestamp).toLocaleDateString()}
                       </span>
                     </div>

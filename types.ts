@@ -39,6 +39,7 @@ export interface ThoughtUpdate {
   aiResponse: string;
   previousStage: GrowthStage;
   newStage: GrowthStage;
+  nextStep?: NextStep | null;
 }
 
 export interface ThoughtCard extends GeneratedContent {

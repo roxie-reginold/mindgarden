@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { GeneratedContent, ThoughtMeta, ThoughtCategory, NextStep, ThoughtCard, GrowthStage } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Removed global 'ai' instance to prevent startup crashes regarding process.env access
 
 const TEXT_MODEL = "gemini-3-flash-preview";
-const IMAGE_MODEL = "gemini-2.5-flash-image"; 
+const IMAGE_MODEL = "gemini-3-pro-image-preview"; 
 
 interface AnalysisResponse {
   emotion: string;
@@ -22,6 +22,25 @@ interface WateringResponse {
   newStage: GrowthStage;
   hasNextStep: boolean;
   nextStep: NextStep | null;
+}
+
+// Helper for retry logic with exponential backoff
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    const isOverloaded = 
+      error?.status === 503 || 
+      error?.code === 503 ||
+      (error?.message && (error.message.includes('overloaded') || error.message.includes('503')));
+
+    if (retries > 0 && isOverloaded) {
+      console.warn(`Model overloaded. Retrying in ${delay}ms... (${retries} attempts remaining)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callWithRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
 }
 
 export const generateMindGardenContent = async (text: string): Promise<GeneratedContent> => {
@@ -43,13 +62,19 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
         intent: analysis.hasNextStep ? 'action' : 'rest' // inferred
       },
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
+    if (error.message?.includes('overloaded') || error.status === 503) {
+       throw new Error("The garden is very busy right now. Please try again in a moment.");
+    }
     throw new Error("The garden is cloudy right now. Please try again later.");
   }
 };
 
 export const waterMindGardenThought = async (thought: ThoughtCard, updateText: string): Promise<WateringResponse> => {
+  // Instantiate client here to ensure fresh API key and avoid global scope issues
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const prompt = `
     You are the MindGarden AI.
     Original Thought: "${thought.originalText}"
@@ -75,7 +100,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
     Return JSON.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callWithRetry(() => ai.models.generateContent({
     model: TEXT_MODEL,
     contents: prompt,
     config: {
@@ -99,7 +124,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
         required: ["acknowledgment", "newStage", "hasNextStep"]
       }
     }
-  });
+  }));
 
   if (!response.text) throw new Error("Failed to water plant.");
   
@@ -109,6 +134,9 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
 };
 
 async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse> {
+  // Instantiate client locally
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const prompt = `
     You are the MindGarden AI. Your goal is to be a sanctuary, not a task manager.
     Analyze the user input: "${userText}".
@@ -140,7 +168,7 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
     Return STRICT JSON object.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callWithRetry(() => ai.models.generateContent({
     model: TEXT_MODEL,
     contents: prompt,
     config: {
@@ -171,7 +199,7 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
         required: ["category", "topic", "emotion", "intensity", "metaphors", "reflection", "hasNextStep"],
       },
     },
-  });
+  }));
 
   if (!response.text) {
     throw new Error("Failed to analyze thought.");
@@ -188,6 +216,9 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
 }
 
 async function generateSymbolicImage(metaphors: string[], emotion: string): Promise<string> {
+  // Instantiate client locally
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const imagePrompt = `
     A soft, dreamlike watercolor illustration representing: ${metaphors.join(", ")} and the feeling of ${emotion}.
     
@@ -207,12 +238,19 @@ async function generateSymbolicImage(metaphors: string[], emotion: string): Prom
     - NO chaotic elements.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await callWithRetry(() => ai.models.generateContent({
     model: IMAGE_MODEL,
     contents: {
       parts: [{ text: imagePrompt }],
     },
-  });
+    // Gemini 3 Pro Image configuration
+    config: {
+      imageConfig: {
+        aspectRatio: "1:1",
+        imageSize: "1K"
+      }
+    }
+  }));
 
   let imageUrl = "";
   const candidates = response.candidates;
