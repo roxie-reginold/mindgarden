@@ -6,7 +6,18 @@ const STORAGE_KEY = 'mindgarden_thoughts_v1';
 export const saveThought = async (thought: ThoughtCard): Promise<void> => {
   try {
     const existing = (await getThoughts()) || [];
-    const updated = [thought, ...existing];
+    const index = existing.findIndex((t) => t.id === thought.id);
+    
+    let updated: ThoughtCard[];
+    if (index !== -1) {
+      // Update existing
+      updated = [...existing];
+      updated[index] = thought;
+    } else {
+      // Create new
+      updated = [thought, ...existing];
+    }
+    
     await set(STORAGE_KEY, updated);
   } catch (error) {
     console.error('Failed to save thought to garden:', error);

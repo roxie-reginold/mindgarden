@@ -1,5 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { GeneratedContent, ThoughtMeta, ThoughtCategory } from "../types";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GeneratedContent, ThoughtMeta, ThoughtCategory, NextStep, ThoughtCard, GrowthStage } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -8,12 +8,20 @@ const IMAGE_MODEL = "gemini-2.5-flash-image";
 
 interface AnalysisResponse {
   emotion: string;
-  intent: string;
-  intensity: string;
+  intensity: 'low' | 'medium' | 'high';
   metaphors: string[];
   reflection: string;
   category: ThoughtCategory;
   topic: string;
+  hasNextStep: boolean;
+  nextStep: NextStep | null;
+}
+
+interface WateringResponse {
+  acknowledgment: string;
+  newStage: GrowthStage;
+  hasNextStep: boolean;
+  nextStep: NextStep | null;
 }
 
 export const generateMindGardenContent = async (text: string): Promise<GeneratedContent> => {
@@ -26,11 +34,13 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
       reflection: analysis.reflection,
       meta: {
         emotion: analysis.emotion,
-        intent: analysis.intent,
-        intensity: analysis.intensity as any,
+        intensity: analysis.intensity,
         metaphors: analysis.metaphors,
         category: analysis.category,
         topic: analysis.topic,
+        hasNextStep: analysis.hasNextStep,
+        nextStep: analysis.nextStep,
+        intent: analysis.hasNextStep ? 'action' : 'rest' // inferred
       },
     };
   } catch (error) {
@@ -39,30 +49,30 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
   }
 };
 
-async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse> {
+export const waterMindGardenThought = async (thought: ThoughtCard, updateText: string): Promise<WateringResponse> => {
   const prompt = `
-    Analyze the user input: "${userText}".
-    
-    Return a STRICT JSON object with these exact keys:
+    You are the MindGarden AI.
+    Original Thought: "${thought.originalText}"
+    Current Stage: ${thought.growthStage}
+    Previous Step: ${thought.meta.nextStep?.text || "None"}
+    User Update: "${updateText}"
 
-    1. category: Choose one of [idea, todo, worry, feeling, goal, memory, other].
-    2. topic: A short, 3-6 word title summarizing the thought (e.g., "Upcoming Math Project", "Anxiety about travel").
-    3. emotion: 1-2 words describing the underlying emotion.
-    4. intensity: one of [low, medium, high].
-    5. intent: one of [idea, todo, worry, reflection].
-    6. metaphors: Array of 2-4 short, visual nouns/adjectives describing the feeling abstractly.
-    7. reflection: EXACTLY one supportive, poetic, reassuring sentence. No advice, no therapy jargon.
+    Task:
+    1. Analyze if this update represents progress, reflection, or completion.
+    2. Determine new stage:
+       - seed -> sprout (if 1st update or engagement)
+       - sprout -> bloom (if deep reflection or multiple updates)
+       - bloom -> fruit (if resolved/completed)
+       - fruit (stays fruit)
+    3. Write a short acknowledgment (supportive, observational, NOT celebratory "Good job").
+    4. Determine if a NEW next step is needed.
 
-    Example JSON:
-    {
-      "category": "worry",
-      "topic": "Uncertainty about the future",
-      "emotion": "anxious",
-      "intensity": "medium",
-      "intent": "worry",
-      "metaphors": ["foggy path", "heavy stones"],
-      "reflection": "Even in the thickest fog, the ground beneath you remains solid."
-    }
+    CRITICAL EMOTIONAL SAFETY RULES:
+    1. No imperatives ("should", "must").
+    2. If intensity is 'high' or user is tired, hasNextStep = false.
+    3. Acknowledgments should be gentle.
+
+    Return JSON.
   `;
 
   const response = await ai.models.generateContent({
@@ -73,18 +83,92 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          category: { type: Type.STRING },
-          topic: { type: Type.STRING },
-          emotion: { type: Type.STRING },
-          intent: { type: Type.STRING },
-          intensity: { type: Type.STRING },
+          acknowledgment: { type: Type.STRING, description: "Gentle observational sentence." },
+          newStage: { type: Type.STRING, enum: ["seed", "sprout", "bloom", "fruit"] },
+          hasNextStep: { type: Type.BOOLEAN },
+          nextStep: {
+            type: Type.OBJECT,
+            properties: {
+              text: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ["do", "clarify", "reflect"] },
+              confidence: { type: Type.NUMBER }
+            },
+            nullable: true
+          }
+        },
+        required: ["acknowledgment", "newStage", "hasNextStep"]
+      }
+    }
+  });
+
+  if (!response.text) throw new Error("Failed to water plant.");
+  
+  const result = JSON.parse(response.text) as WateringResponse;
+  if (!result.hasNextStep) result.nextStep = null;
+  return result;
+};
+
+async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse> {
+  const prompt = `
+    You are the MindGarden AI. Your goal is to be a sanctuary, not a task manager.
+    Analyze the user input: "${userText}".
+
+    CRITICAL EMOTIONAL SAFETY RULES:
+    1. No imperatives (never use "should", "must", "have to", "need to").
+    2. No clinical therapy jargon.
+    3. If intensity is 'high', hasNextStep MUST be false.
+    4. If action would increase guilt, shame, or pressure, hasNextStep MUST be false.
+
+    TASK 1: DECIDE IF A NEXT STEP EXISTS (hasNextStep)
+    - Set FALSE if: 
+      * High intensity emotion (panic, grief, rage).
+      * User expresses exhaustion or burnout.
+      * Input is purely venting or a memory.
+    - Set TRUE if:
+      * User shows explicit intent to act ("I need to", "I want to").
+      * User is looping/stuck (needs CLARITY).
+      * Intensity is LOW/MEDIUM and a micro-step feels supportive.
+
+    TASK 2: DEFINE NEXT STEP (if hasNextStep is true)
+    Type must be one of:
+    1. "do": Smallest possible unit of progress (< 2 min). E.g. "Open the draft."
+    2. "clarify": Reduce ambiguity. E.g. "Name one thing that feels heavy."
+    3. "reflect": Internal processing. E.g. "Notice where this sits in your body."
+    
+    Constraint: Steps must be optional invitations ("Maybe...", "If you like...").
+
+    Return STRICT JSON object.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          category: { type: Type.STRING, enum: ["idea", "todo", "worry", "feeling", "goal", "memory", "other"] },
+          topic: { type: Type.STRING, description: "3-6 word neutral summary" },
+          emotion: { type: Type.STRING, description: "1-2 words describing mood" },
+          intensity: { type: Type.STRING, enum: ["low", "medium", "high"] },
           metaphors: { 
             type: Type.ARRAY,
             items: { type: Type.STRING }
           },
-          reflection: { type: Type.STRING },
+          reflection: { type: Type.STRING, description: "ONE gentle, validating sentence. No advice." },
+          hasNextStep: { type: Type.BOOLEAN },
+          nextStep: {
+            type: Type.OBJECT,
+            properties: {
+              text: { type: Type.STRING, description: "Gentle invitation, max 1 sentence" },
+              type: { type: Type.STRING, enum: ["do", "clarify", "reflect"] },
+              confidence: { type: Type.NUMBER }
+            },
+            nullable: true
+          }
         },
-        required: ["category", "topic", "emotion", "intent", "intensity", "metaphors", "reflection"],
+        required: ["category", "topic", "emotion", "intensity", "metaphors", "reflection", "hasNextStep"],
       },
     },
   });
@@ -93,11 +177,17 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
     throw new Error("Failed to analyze thought.");
   }
 
-  return JSON.parse(response.text) as AnalysisResponse;
+  const result = JSON.parse(response.text) as AnalysisResponse;
+  
+  // Safety fallback if model hallucinates a step when it shouldn't
+  if (!result.hasNextStep) {
+    result.nextStep = null;
+  }
+
+  return result;
 }
 
 async function generateSymbolicImage(metaphors: string[], emotion: string): Promise<string> {
-  // Updated prompt to match the "MindGarden" watercolor map aesthetic
   const imagePrompt = `
     A soft, dreamlike watercolor illustration representing: ${metaphors.join(", ")} and the feeling of ${emotion}.
     

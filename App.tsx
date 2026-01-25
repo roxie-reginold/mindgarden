@@ -5,7 +5,7 @@ import { ListView } from './components/ListView';
 import { PlantingModal } from './components/PlantingModal';
 import { ReflectionModal } from './components/ReflectionModal';
 import { AppView, ThoughtCard, ThoughtCategory, Position } from './types';
-import { generateMindGardenContent } from './services/geminiService';
+import { generateMindGardenContent, waterMindGardenThought } from './services/geminiService';
 import { saveThought, getThoughts, deleteThought } from './services/storageService';
 import { Toaster, toast } from 'react-hot-toast';
 
@@ -88,7 +88,9 @@ const App: React.FC = () => {
         originalText: text,
         createdAt: Date.now(),
         position,
-        hasViewed: false
+        hasViewed: false,
+        growthStage: 'seed',
+        updates: []
       };
 
       await saveThought(newCard);
@@ -104,6 +106,42 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleWater = async (thought: ThoughtCard, updateText: string) => {
+     const loadingToast = toast.loading('Watering...');
+     try {
+       const result = await waterMindGardenThought(thought, updateText);
+       
+       const updatedThought: ThoughtCard = {
+         ...thought,
+         growthStage: result.newStage,
+         meta: {
+           ...thought.meta,
+           hasNextStep: result.hasNextStep,
+           nextStep: result.nextStep
+         },
+         updates: [
+           {
+             id: crypto.randomUUID(),
+             timestamp: Date.now(),
+             text: updateText,
+             aiResponse: result.acknowledgment,
+             previousStage: thought.growthStage,
+             newStage: result.newStage
+           },
+           ...thought.updates
+         ]
+       };
+
+       await saveThought(updatedThought);
+       await refreshGarden();
+       setSelectedThought(updatedThought);
+       toast.success('Nourished', { id: loadingToast });
+     } catch (error) {
+       console.error(error);
+       toast.error('Failed to water plant', { id: loadingToast });
+     }
   };
 
   const handleDelete = async (id: string) => {
@@ -152,6 +190,7 @@ const App: React.FC = () => {
         thought={selectedThought}
         onClose={() => setSelectedThought(null)}
         onDelete={handleDelete}
+        onWater={handleWater}
       />
 
       <Toaster 
