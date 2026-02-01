@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [gardenThoughts, setGardenThoughts] = useState<ThoughtCard[]>([]);
   const [hasApiKey, setHasApiKey] = useState(false);
 
-  // Check for API Key on mount (Required for Gemini 3 Pro Image)
+  // Check for API Key
   useEffect(() => {
     const checkKey = async () => {
       try {
@@ -29,7 +29,6 @@ const App: React.FC = () => {
           const has = await win.aistudio.hasSelectedApiKey();
           setHasApiKey(has);
         } else {
-          // Fallback if not running in IDX/Project IDX environment, assume env key works
           setHasApiKey(true);
         }
       } catch (e) {
@@ -40,7 +39,7 @@ const App: React.FC = () => {
     checkKey();
   }, []);
 
-  // Load thoughts on mount
+  // Load thoughts
   useEffect(() => {
     refreshGarden();
   }, []);
@@ -48,7 +47,8 @@ const App: React.FC = () => {
   const refreshGarden = async () => {
     try {
       const thoughts = await getThoughts();
-      setGardenThoughts(thoughts);
+      // Sort by creation to ensure logical timeline, though rendering depends on slot
+      setGardenThoughts(thoughts.sort((a, b) => a.createdAt - b.createdAt));
     } catch (error) {
       console.error("Failed to load garden:", error);
       toast.error("Could not load your garden.");
@@ -59,52 +59,75 @@ const App: React.FC = () => {
     const win = window as any;
     if (win.aistudio) {
       await win.aistudio.openSelectKey();
-      // Assume success to mitigate race condition
       setHasApiKey(true);
     }
   };
 
-  const getPositionForCategory = (category: ThoughtCategory): Position => {
-    // Map Layout based on "MindGarden" reference:
-    // To-Do Patch: Top Left
-    // Ideas Meadow: Top Right
-    // Memory Blossoms: Top Center
-    // Feelings Grove: Center Left
-    // Worry Shade: Center Right
-    // Goal Vines: Bottom Center
+  // --- SLOT LOGIC FOR ORGANIC PLACEMENT ---
+  
+  // Tuned coordinates for the "Two Islands" image (3:2 Aspect Ratio)
+  // Left Island: x 5-55%
+  // Right Island: x 60-95%
+  const ISLAND_SLOTS = [
+    // --- Left Island (Large L-Shape) ---
+    { x: 15, y: 55 }, // Top-left tip
+    { x: 35, y: 40 }, // Top-center (back)
+    { x: 50, y: 45 }, // Top-right tip of left island
+    { x: 25, y: 65 }, // Mid-left
+    { x: 45, y: 60 }, // Mid-right (near path)
+    { x: 20, y: 80 }, // Bottom-left lobe
+    { x: 40, y: 75 }, // Bottom-center
+    
+    // --- Right Island (Kidney Shape) ---
+    { x: 75, y: 50 }, // Top-center
+    { x: 90, y: 60 }, // Top-right lobe
+    { x: 65, y: 70 }, // Left edge
+    { x: 85, y: 75 }, // Right edge
+    { x: 75, y: 85 }, // Bottom tip
+  ];
 
-    let xRange = [0, 100];
-    let yRange = [0, 100];
+  const getNextAvailablePosition = (currentThoughts: ThoughtCard[]): Position => {
+    // We want to fill gaps if thoughts were deleted, or append.
+    // Let's iterate through all possible slot indices (0 to infinity)
+    // and find the first one that isn't occupied.
+    
+    // Create a set of occupied "Global Indices"
+    // Global Index = islandIndex * slotsPerIsland + localSlotIndex
+    const occupiedIndices = new Set<number>();
+    const SLOTS_PER_ISLAND = ISLAND_SLOTS.length;
 
-    switch(category) {
-      case 'todo': 
-        // Top Left
-        xRange = [10, 30]; yRange = [15, 35]; break;
-      case 'idea': 
-        // Top Right
-        xRange = [65, 85]; yRange = [10, 30]; break;
-      case 'memory': 
-        // Top Center
-        xRange = [40, 60]; yRange = [15, 30]; break;
-      case 'feeling': 
-        // Center Left
-        xRange = [15, 35]; yRange = [45, 65]; break;
-      case 'worry': 
-        // Center Right
-        xRange = [65, 85]; yRange = [40, 60]; break;
-      case 'goal': 
-        // Bottom Center
-        xRange = [35, 65]; yRange = [60, 80]; break;
-      default: 
-        // Random edges for 'other'
-        xRange = [10, 90]; yRange = [10, 90]; break;
+    currentThoughts.forEach(t => {
+      // Reverse engineer the index from the position
+      const islandIndex = Math.floor(t.position.x / 100);
+      const localX = t.position.x % 100;
+      const localY = t.position.y;
+      
+      // Find which slot this corresponds to (with tolerance for float math)
+      const slotIndex = ISLAND_SLOTS.findIndex(slot => 
+        Math.abs(slot.x - localX) < 1 && Math.abs(slot.y - localY) < 1
+      );
+      
+      if (slotIndex !== -1) {
+        const globalIndex = islandIndex * SLOTS_PER_ISLAND + slotIndex;
+        occupiedIndices.add(globalIndex);
+      }
+    });
+
+    // Find first free index
+    let i = 0;
+    while (occupiedIndices.has(i)) {
+      i++;
     }
 
-    // Add some randomness within the zone
-    const x = Math.floor(Math.random() * (xRange[1] - xRange[0]) + xRange[0]);
-    const y = Math.floor(Math.random() * (yRange[1] - yRange[0]) + yRange[0]);
-    
-    return { x, y };
+    // Convert free index back to position
+    const islandIndex = Math.floor(i / SLOTS_PER_ISLAND);
+    const localSlotIndex = i % SLOTS_PER_ISLAND;
+    const slot = ISLAND_SLOTS[localSlotIndex];
+
+    return {
+      x: (islandIndex * 100) + slot.x,
+      y: slot.y
+    };
   };
 
   const handlePlant = async (text: string) => {
@@ -113,7 +136,9 @@ const App: React.FC = () => {
     
     try {
       const content = await generateMindGardenContent(text);
-      const position = getPositionForCategory(content.meta.category);
+      
+      // Calculate position based on next available slot
+      const position = getNextAvailablePosition(gardenThoughts);
       
       const newCard: ThoughtCard = {
         ...content,
@@ -130,8 +155,10 @@ const App: React.FC = () => {
       await refreshGarden();
       
       setIsPlanting(false);
-      // Open the detail view immediately for gratification
-      setSelectedThought(newCard);
+      
+      // Small delay to let animation start
+      setTimeout(() => setSelectedThought(newCard), 800);
+      
       toast.success(`Planted a ${content.meta.plantSpecies} seed`, { id: loadingToast });
     } catch (error: any) {
       console.error(error);
@@ -148,7 +175,6 @@ const App: React.FC = () => {
        
        const updatedThought: ThoughtCard = {
          ...thought,
-         // Update image ONLY if a new one was generated
          imageUrl: result.newImageUrl || thought.imageUrl, 
          growthStage: result.newStage,
          meta: {
@@ -198,7 +224,6 @@ const App: React.FC = () => {
     }
   };
 
-  // API Key Gate
   if (!hasApiKey) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6 relative overflow-hidden">
@@ -224,24 +249,20 @@ const App: React.FC = () => {
           >
             <span>Select API Key</span>
           </button>
-
-          <p className="mt-6 text-xs text-stone-400">
-            Ensure your key has billing enabled. <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline hover:text-stone-600">Billing Information</a>
-          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 font-sans selection:bg-teal-100 selection:text-teal-900 overflow-x-hidden">
+    <div className="min-h-screen bg-stone-50 font-sans selection:bg-teal-100 selection:text-teal-900 overflow-hidden">
       <Header 
         currentView={view} 
         setView={setView} 
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
       
-      <main className="pt-16">
+      <main className="pt-16 h-screen">
         {view === AppView.GARDEN && (
           <GardenCanvas 
             thoughts={gardenThoughts}
@@ -251,10 +272,12 @@ const App: React.FC = () => {
         )}
 
         {view === AppView.LIST && (
-          <ListView 
-            thoughts={gardenThoughts}
-            onThoughtClick={setSelectedThought}
-          />
+          <div className="h-full overflow-y-auto">
+            <ListView 
+              thoughts={gardenThoughts}
+              onThoughtClick={setSelectedThought}
+            />
+          </div>
         )}
       </main>
 

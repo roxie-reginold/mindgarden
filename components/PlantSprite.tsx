@@ -12,13 +12,19 @@ export const PlantSprite: React.FC<PlantSpriteProps> = ({ thought, onClick }) =>
   // Calculate size based on growth stage
   const getSize = () => {
     switch(thought.growthStage) {
-      case 'seed': return 'w-20 h-20';
-      case 'sprout': return 'w-28 h-28';
-      case 'bloom': return 'w-36 h-36';
-      case 'fruit': return 'w-44 h-44';
-      default: return 'w-28 h-28';
+      case 'seed': return 'w-16 h-16 md:w-20 md:h-20';
+      case 'sprout': return 'w-24 h-24 md:w-28 md:h-28';
+      case 'bloom': return 'w-32 h-32 md:w-36 md:h-36';
+      case 'fruit': return 'w-40 h-40 md:w-44 md:h-44';
+      default: return 'w-24 h-24 md:w-28 md:h-28';
     }
   };
+
+  // Normalize X for the specific island context.
+  // The parent passes absolute position (e.g. x=150), but this component is rendered 
+  // inside an Island container, so we want local percentages.
+  const localX = thought.position.x % 100;
+  const localY = thought.position.y;
 
   return (
     <motion.div
@@ -33,38 +39,32 @@ export const PlantSprite: React.FC<PlantSpriteProps> = ({ thought, onClick }) =>
         y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: Math.random() * 2 }
       }}
       style={{
-        left: `${thought.position.x}%`,
-        top: `${thought.position.y}%`,
+        left: `${localX}%`,
+        top: `${localY}%`,
+        zIndex: Math.floor(localY) // Depth sorting: lower down the screen = closer = higher z-index
       }}
-      className="absolute cursor-pointer z-10 group flex flex-col items-center justify-center transform -translate-x-1/2 -translate-y-1/2"
+      className="absolute cursor-pointer group flex flex-col items-center justify-center transform -translate-x-1/2 -translate-y-[85%]" // Anchor bottom-center to the point
       onClick={() => onClick(thought)}
     >
       <div className={`
         relative ${getSize()} flex items-center justify-center 
         transition-transform duration-300 group-hover:scale-110
       `}>
-        {/* 
-            Applied mix-blend-multiply to make the white background transparent against the map.
-            Removed drop-shadow to avoid shadowing the white bounding box.
-        */}
         <img 
           src={thought.imageUrl} 
           alt={thought.meta.topic}
           className="w-full h-full object-contain mix-blend-multiply opacity-95 group-hover:opacity-100 transition-opacity"
         />
         
-        {/* Optional grounding shadow for depth without the box shadow */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-2 bg-stone-900/10 blur-sm rounded-[100%] -z-10 pointer-events-none" />
+        {/* Grounding shadow */}
+        <div className="absolute bottom-[10%] left-1/2 -translate-x-1/2 w-1/2 h-1.5 bg-stone-900/10 blur-[2px] rounded-[100%] -z-10 pointer-events-none" />
       </div>
 
-      {/* Floating Label */}
-      <div className="absolute -bottom-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-y-1 pointer-events-none z-20">
-        <div className="bg-white/90 backdrop-blur-md border border-stone-100 px-3 py-1.5 rounded-xl shadow-lg flex flex-col items-center">
-          <span className="font-serif text-stone-700 text-sm whitespace-nowrap leading-none mb-0.5">
+      {/* Simplified Hover Label - Topic Only */}
+      <div className="absolute -top-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-y-1 pointer-events-none z-50">
+        <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-sm border border-white/50">
+          <span className="font-serif text-stone-700 text-xs md:text-sm whitespace-nowrap">
             {thought.meta.topic}
-          </span>
-          <span className="text-[10px] text-stone-400 uppercase tracking-wider">
-            {thought.meta.plantSpecies} • {thought.growthStage}
           </span>
         </div>
       </div>
