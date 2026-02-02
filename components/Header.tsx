@@ -1,14 +1,13 @@
 import React from 'react';
-import { Grid, Map, Settings } from 'lucide-react';
+import { Grid, Map } from 'lucide-react';
 import { AppView } from '../types';
 
 interface HeaderProps {
   currentView: AppView;
   setView: (view: AppView) => void;
-  onSettingsClick: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, setView, onSettingsClick }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, setView }) => {
   return (
     <header className="fixed top-0 left-0 right-0 h-16 z-50 flex items-center justify-between px-6 md:px-12 bg-paper/90 backdrop-blur-md border-b border-stone-200/50 shadow-sm transition-all duration-300">
       
@@ -65,14 +64,6 @@ export const Header: React.FC<HeaderProps> = ({ currentView, setView, onSettings
           </button>
         </nav>
 
-        {/* Settings Button */}
-        <button
-          onClick={onSettingsClick}
-          className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-full transition-colors"
-          title="Storage Settings"
-        >
-          <Settings size={20} />
-        </button>
       </div>
     </header>
   );

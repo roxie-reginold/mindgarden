@@ -14,7 +14,8 @@ export interface ThoughtMeta {
   emotion: string;
   intent?: string; // Optional/Legacy
   intensity: 'low' | 'medium' | 'high';
-  metaphors: string[];
+  metaphors: string[]; // Legacy, kept for backward compatibility
+  plantSpecies: string; // NEW: Enforces visual consistency
   category: ThoughtCategory;
   topic: string; // Short 3-6 word label
   hasNextStep: boolean;
@@ -50,6 +51,14 @@ export interface ThoughtUpdate {
   previousStage: GrowthStage;
   newStage: GrowthStage;
   nextStep?: NextStep | null;
+}
+
+export interface WateringResponse {
+  acknowledgment: string;
+  newStage: GrowthStage;
+  hasNextStep: boolean;
+  nextStep: NextStep | null;
+  newImageUrl?: string; // NEW: Optional image update if stage changes
 }
 
 export interface ThoughtCard extends GeneratedContent {

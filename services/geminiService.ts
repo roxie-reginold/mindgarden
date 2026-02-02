@@ -1,15 +1,32 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI, Type, Schema, GenerateContentResponse } from "@google/genai";
 import { GeneratedContent, ThoughtMeta, ThoughtCategory, NextStep, ThoughtCard, GrowthStage } from "../types";
-
-// Removed global 'ai' instance to prevent startup crashes regarding process.env access
 
 const TEXT_MODEL = "gemini-3-flash-preview";
 const IMAGE_MODEL = "gemini-3-pro-image-preview"; 
+const API_TIMEOUT_MS = 25000; // Increased timeout for potential double-generation
+
+// --- VISUAL SYSTEM DEFINITIONS ---
+
+const SPECIES_MAP: Record<ThoughtCategory, string> = {
+  idea: "Sunflower",
+  todo: "Aloe Vera",
+  worry: "Lavender plant",
+  feeling: "Wild Rose bush",
+  goal: "Oak Tree sapling",
+  memory: "Forget-me-not flowers",
+  other: "Dandelion"
+};
+
+const STAGE_DESCRIPTIONS: Record<GrowthStage, string> = {
+  seed: "a small seed planted in rich soil, waiting to grow",
+  sprout: "a small, tender green sprout just emerging from the ground",
+  bloom: "a healthy plant beginning to show buds or small flowers",
+  fruit: "a mature, fully grown plant in full bloom or bearing fruit"
+};
 
 interface AnalysisResponse {
   emotion: string;
   intensity: 'low' | 'medium' | 'high';
-  metaphors: string[];
   reflection: string;
   category: ThoughtCategory;
   topic: string;
@@ -21,25 +38,31 @@ interface AnalysisResponse {
   };
 }
 
-interface WateringResponse {
+interface WateringAnalysisResponse {
   acknowledgment: string;
   newStage: GrowthStage;
   hasNextStep: boolean;
   nextStep: NextStep | null;
 }
 
-// Helper for retry logic with exponential backoff
-async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
-  try {
-    return await fn();
-  } catch (error: any) {
-    const isOverloaded = 
-      error?.status === 503 || 
-      error?.code === 503 ||
-      (error?.message && (error.message.includes('overloaded') || error.message.includes('503')));
+interface WateringResponse {
+  acknowledgment: string;
+  newStage: GrowthStage;
+  hasNextStep: boolean;
+  nextStep: NextStep | null;
+  newImageUrl?: string;
+}
 
+// Helper for retry logic
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Promise<T> {
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("The garden is taking a moment to grow...")), API_TIMEOUT_MS)
+    );
+    return await Promise.race([fn(), timeoutPromise]);
+  } catch (error: any) {
+    const isOverloaded = error?.status === 503 || error?.code === 503 || (error?.message && error.message.includes('overloaded'));
     if (retries > 0 && isOverloaded) {
-      console.warn(`Model overloaded. Retrying in ${delay}ms... (${retries} attempts remaining)`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return callWithRetry(fn, retries - 1, delay * 2);
     }
@@ -48,7 +71,17 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000)
 }
 
 export const generateMindGardenContent = async (text: string): Promise<GeneratedContent & { songSuggestion: { query: string; reasoning: string } }> => {
+const getClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API Key is missing.");
+  return new GoogleGenAI({ apiKey });
+}
+
+// --- MAIN FUNCTIONS ---
+
+export const generateMindGardenContent = async (text: string): Promise<GeneratedContent> => {
   try {
+    // 1. Analyze Text to get Category & Emotion
     const analysis = await analyzeTextAndReflect(text);
     
     // Try to generate image, but use fallback if quota exceeded
@@ -59,6 +92,15 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
       // Use fallback placeholder image when quota exceeded
       console.warn("Image generation failed, using fallback:", imageError?.message);
       imageUrl = `https://picsum.photos/500/500?blur=5&grayscale`;
+    const species = SPECIES_MAP[analysis.category];
+
+    // 2. Generate Initial Seed Image
+    let imageUrl = "";
+    try {
+      imageUrl = await generateBotanyImage(species, 'seed', analysis.emotion);
+    } catch (imgError) {
+      console.warn("Image gen failed:", imgError);
+      imageUrl = `https://picsum.photos/seed/${Date.now()}/800/800?blur=8`;
     }
 
     return {
@@ -67,12 +109,12 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
       meta: {
         emotion: analysis.emotion,
         intensity: analysis.intensity,
-        metaphors: analysis.metaphors,
+        metaphors: [], // Deprecated but kept for type safety
+        plantSpecies: species, // New field
         category: analysis.category,
         topic: analysis.topic,
         hasNextStep: analysis.hasNextStep,
         nextStep: analysis.nextStep,
-        intent: analysis.hasNextStep ? 'action' : 'rest' // inferred
       },
       songSuggestion: analysis.songSuggestion
     };
@@ -89,39 +131,31 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
     }
     
     throw new Error("The garden is cloudy right now. Please try again later.");
+    console.error("Gemini Error:", error);
+    throw new Error("The garden is busy. Please try again.");
   }
 };
 
 export const waterMindGardenThought = async (thought: ThoughtCard, updateText: string): Promise<WateringResponse> => {
-  // Instantiate client here to ensure fresh API key and avoid global scope issues
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getClient();
+  const currentSpecies = thought.meta.plantSpecies || SPECIES_MAP[thought.meta.category] || "Plant";
 
+  // 1. Analyze the update (Text)
   const prompt = `
     You are the MindGarden AI.
-    Original Thought: "${thought.originalText}"
+    Original: "${thought.originalText}"
     Current Stage: ${thought.growthStage}
-    Previous Step: ${thought.meta.nextStep?.text || "None"}
-    User Update: "${updateText}"
+    Update: "${updateText}"
 
-    Task:
-    1. Analyze if this update represents progress, reflection, or completion.
-    2. Determine new stage:
-       - seed -> sprout (if 1st update or engagement)
-       - sprout -> bloom (if deep reflection or multiple updates)
-       - bloom -> fruit (if resolved/completed)
-       - fruit (stays fruit)
-    3. Write a short acknowledgment (supportive, observational, NOT celebratory "Good job").
-    4. Determine if a NEW next step is needed.
-
-    CRITICAL EMOTIONAL SAFETY RULES:
-    1. No imperatives ("should", "must").
-    2. If intensity is 'high' or user is tired, hasNextStep = false.
-    3. Acknowledgments should be gentle.
-
-    Return JSON.
+    Rules:
+    - Determine new growth stage (seed->sprout->bloom->fruit).
+    - If user reflects deeply or takes action, ADVANCE stage.
+    - If user is just venting or stuck, STAY same stage.
+    - Write a gentle acknowledgment.
+    - Determine if next step is needed.
   `;
 
-  const response = await callWithRetry(() => ai.models.generateContent({
+  const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
     model: TEXT_MODEL,
     contents: prompt,
     config: {
@@ -129,7 +163,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          acknowledgment: { type: Type.STRING, description: "Gentle observational sentence." },
+          acknowledgment: { type: Type.STRING },
           newStage: { type: Type.STRING, enum: ["seed", "sprout", "bloom", "fruit"] },
           hasNextStep: { type: Type.BOOLEAN },
           nextStep: {
@@ -148,15 +182,35 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
   }));
 
   if (!response.text) throw new Error("Failed to water plant.");
+  const result = JSON.parse(response.text) as WateringAnalysisResponse;
   
-  const result = JSON.parse(response.text) as WateringResponse;
-  if (!result.hasNextStep) result.nextStep = null;
-  return result;
+  // 2. If stage advanced, regenerate image
+  let newImageUrl: string | undefined = undefined;
+  
+  if (result.newStage !== thought.growthStage) {
+    try {
+      newImageUrl = await generateBotanyImage(
+        currentSpecies, 
+        result.newStage, 
+        thought.meta.emotion // Keep original emotion or maybe infer new one? Let's keep consistency.
+      );
+    } catch (e) {
+      console.warn("Failed to regenerate image on growth:", e);
+      // Fail gracefully, keep old image
+    }
+  }
+
+  return {
+    ...result,
+    newImageUrl,
+    nextStep: result.hasNextStep ? result.nextStep : null
+  };
 };
 
+// --- HELPERS ---
+
 async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse> {
-  // Instantiate client locally
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getClient();
 
   const prompt = `
     You are the MindGarden AI. Your goal is to be a sanctuary, not a task manager.
@@ -206,9 +260,21 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
     - Extremely sad/triggering music for vulnerable states
 
     Return STRICT JSON object.
+    Analyze user thought: "${userText}".
+    Map to ONE category:
+    - idea (creative sparks)
+    - todo (tasks)
+    - worry (anxiety)
+    - feeling (emotions)
+    - goal (aspirations)
+    - memory (past)
+    - other
+
+    Provide a gentle reflection.
+    Return JSON.
   `;
 
-  const response = await callWithRetry(() => ai.models.generateContent({
+  const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
     model: TEXT_MODEL,
     contents: prompt,
     config: {
@@ -217,19 +283,15 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
         type: Type.OBJECT,
         properties: {
           category: { type: Type.STRING, enum: ["idea", "todo", "worry", "feeling", "goal", "memory", "other"] },
-          topic: { type: Type.STRING, description: "3-6 word neutral summary" },
-          emotion: { type: Type.STRING, description: "1-2 words describing mood" },
+          topic: { type: Type.STRING },
+          emotion: { type: Type.STRING },
           intensity: { type: Type.STRING, enum: ["low", "medium", "high"] },
-          metaphors: { 
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          },
-          reflection: { type: Type.STRING, description: "ONE gentle, validating sentence. No advice." },
+          reflection: { type: Type.STRING },
           hasNextStep: { type: Type.BOOLEAN },
           nextStep: {
             type: Type.OBJECT,
             properties: {
-              text: { type: Type.STRING, description: "Gentle invitation, max 1 sentence" },
+              text: { type: Type.STRING },
               type: { type: Type.STRING, enum: ["do", "clarify", "reflect"] },
               confidence: { type: Type.NUMBER }
             },
@@ -245,53 +307,63 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
           }
         },
         required: ["category", "topic", "emotion", "intensity", "metaphors", "reflection", "hasNextStep", "songSuggestion"],
+        required: ["category", "topic", "emotion", "intensity", "reflection", "hasNextStep"],
       },
     },
   }));
 
-  if (!response.text) {
-    throw new Error("Failed to analyze thought.");
-  }
-
-  const result = JSON.parse(response.text) as AnalysisResponse;
-  
-  // Safety fallback if model hallucinates a step when it shouldn't
-  if (!result.hasNextStep) {
-    result.nextStep = null;
-  }
-
-  return result;
+  if (!response.text) throw new Error("Analysis failed");
+  const res = JSON.parse(response.text) as AnalysisResponse;
+  if (!res.hasNextStep) res.nextStep = null;
+  return res;
 }
 
-async function generateSymbolicImage(metaphors: string[], emotion: string): Promise<string> {
-  // Instantiate client locally
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+async function generateBotanyImage(species: string, stage: GrowthStage, emotion: string): Promise<string> {
+  const ai = getClient();
+  const stageDesc = STAGE_DESCRIPTIONS[stage];
 
+  // STRICT PROMPT TEMPLATE
   const imagePrompt = `
-    A soft, dreamlike watercolor illustration representing: ${metaphors.join(", ")} and the feeling of ${emotion}.
-    
-    Art Style: 
-    - Traditional Watercolor painting on textured paper.
-    - Soft, pastel color palette (pale blues, gentle pinks, sage greens, warm ambers).
-    - Ethereal, flowing shapes. 
-    - Minimalist and symbolic.
-    - Visible paper grain texture.
-    - White vignette edges to blend with a white page.
+    Create a high-quality digital plant illustration suitable for a UI garden.
 
-    Constraints: 
-    - NO text. 
-    - NO photorealism. 
-    - NO people. 
-    - NO dark or harsh black lines.
-    - NO chaotic elements.
+    Subject:
+    - A ${species} plant.
+
+    Growth State:
+    - ${stageDesc} (same plant species, clearly growing, not changing identity).
+
+    Style:
+    - Clean, modern digital illustration.
+    - Soft vector-like shapes with smooth edges.
+    - Subtle gradients for depth (very light, no harsh contrast).
+    - Matte finish, no texture noise.
+    - Calm, minimal, friendly style.
+
+    Color Palette:
+    - Base colors aligned with the app’s soft, natural theme.
+    - Emotion (${emotion}) influences tint only:
+      - calm → cool green / blue undertones
+      - anxious → muted, slightly desaturated tones
+      - hopeful → warm highlights, gentle glow
+    - Avoid neon, avoid overly saturated colors.
+
+    Composition:
+    - Centered plant, front-facing or slight angle.
+    - Isolated on a TRANSPARENT BACKGROUND (alpha channel).
+    - Clear silhouette for easy placement.
+
+    Constraints:
+    - NO watercolor
+    - NO sketch lines
+    - NO rough brush strokes
+    - NO text
+    - NO frames
+    - NO background scenery (no soil, sky, pots, or shadows)
   `;
 
-  const response = await callWithRetry(() => ai.models.generateContent({
+  const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
     model: IMAGE_MODEL,
-    contents: {
-      parts: [{ text: imagePrompt }],
-    },
-    // Gemini 3 Pro Image configuration
+    contents: { parts: [{ text: imagePrompt }] },
     config: {
       imageConfig: {
         aspectRatio: "1:1",
@@ -300,20 +372,8 @@ async function generateSymbolicImage(metaphors: string[], emotion: string): Prom
     }
   }));
 
-  let imageUrl = "";
-  const candidates = response.candidates;
-  if (candidates && candidates.length > 0) {
-    for (const part of candidates[0].content.parts) {
-      if (part.inlineData && part.inlineData.data) {
-        imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        break;
-      }
-    }
-  }
+  const candidate = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  if (!candidate?.inlineData?.data) throw new Error("No image generated");
 
-  if (!imageUrl) {
-    return `https://picsum.photos/500/500?blur=5&grayscale`;
-  }
-
-  return imageUrl;
+  return `data:${candidate.inlineData.mimeType};base64,${candidate.inlineData.data}`;
 }
