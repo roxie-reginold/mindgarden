@@ -70,28 +70,18 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000)
   }
 }
 
-export const generateMindGardenContent = async (text: string): Promise<GeneratedContent & { songSuggestion: { query: string; reasoning: string } }> => {
 const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("API Key is missing.");
   return new GoogleGenAI({ apiKey });
-}
+};
 
 // --- MAIN FUNCTIONS ---
 
-export const generateMindGardenContent = async (text: string): Promise<GeneratedContent> => {
+export const generateMindGardenContent = async (text: string): Promise<GeneratedContent & { songSuggestion: { query: string; reasoning: string } }> => {
   try {
     // 1. Analyze Text to get Category & Emotion
     const analysis = await analyzeTextAndReflect(text);
-    
-    // Try to generate image, but use fallback if quota exceeded
-    let imageUrl: string;
-    try {
-      imageUrl = await generateSymbolicImage(analysis.metaphors, analysis.emotion);
-    } catch (imageError: any) {
-      // Use fallback placeholder image when quota exceeded
-      console.warn("Image generation failed, using fallback:", imageError?.message);
-      imageUrl = `https://picsum.photos/500/500?blur=5&grayscale`;
     const species = SPECIES_MAP[analysis.category];
 
     // 2. Generate Initial Seed Image
@@ -110,7 +100,7 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
         emotion: analysis.emotion,
         intensity: analysis.intensity,
         metaphors: [], // Deprecated but kept for type safety
-        plantSpecies: species, // New field
+        plantSpecies: species,
         category: analysis.category,
         topic: analysis.topic,
         hasNextStep: analysis.hasNextStep,
@@ -131,8 +121,6 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
     }
     
     throw new Error("The garden is cloudy right now. Please try again later.");
-    console.error("Gemini Error:", error);
-    throw new Error("The garden is busy. Please try again.");
   }
 };
 
@@ -306,8 +294,7 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
             required: ["query", "reasoning"]
           }
         },
-        required: ["category", "topic", "emotion", "intensity", "metaphors", "reflection", "hasNextStep", "songSuggestion"],
-        required: ["category", "topic", "emotion", "intensity", "reflection", "hasNextStep"],
+        required: ["category", "topic", "emotion", "intensity", "reflection", "hasNextStep", "songSuggestion"],
       },
     },
   }));

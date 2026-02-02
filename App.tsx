@@ -135,8 +135,6 @@ const App: React.FC = () => {
     
     try {
       const { songSuggestion, ...content } = await generateMindGardenContent(text);
-      const position = getPositionForCategory(content.meta.category);
-      const content = await generateMindGardenContent(text);
       
       // Calculate position based on next available slot
       const position = getNextAvailablePosition(gardenThoughts);

@@ -122,14 +122,9 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                 </div>
             </div>
 
-              {/* Music Player */}
-              <MusicPlayer song={thought.music} />
+            {/* Music Player */}
+            <MusicPlayer song={thought.music} />
 
-              {/* Journal / Growth Section */}
-              <div className="border-t border-stone-100 pt-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <History size={16} className="text-stone-400" />
-                  <span className="text-xs font-bold tracking-widest text-stone-400 uppercase">
             {/* Next Step / Action */}
             {thought.meta.hasNextStep && thought.meta.nextStep && (
                 <div className="w-full mb-12 relative overflow-hidden rounded-2xl bg-gradient-to-br from-stone-50 to-white border border-stone-100 p-6 shadow-sm">
