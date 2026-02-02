@@ -208,3 +208,30 @@ Check [USER_GUIDE.md](file:///Users/amberwang/Desktop/MindGarden/USER_GUIDE.md) 
 
 </div>
 
+1. Install dependencies:
+   `npm install`
+2. Set up API keys in [.env](.env):
+   - `GEMINI_API_KEY`: Your Gemini API key
+   - `SPOTIFY_CLIENT_ID`: Your Spotify Client ID (see below)
+   - `SPOTIFY_CLIENT_SECRET`: Your Spotify Client Secret (see below)
+3. Run the app:
+   `npm run dev`
+
+### Getting Spotify API Credentials
+
+To enable mood-based music recommendations:
+
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Log in with your Spotify account (or create one)
+3. Click **"Create app"**
+4. Fill in the app details:
+   - App name: "MindGarden" (or any name)
+   - App description: "Personal journaling app"
+   - Redirect URI: `http://localhost:5173` (or leave blank for now)
+   - Check the box to agree to terms
+5. Click **"Save"**
+6. In your app settings, you'll see:
+   - **Client ID** - Copy this to `.env` as `SPOTIFY_CLIENT_ID`
+   - **Client Secret** - Click "View client secret" and copy to `.env` as `SPOTIFY_CLIENT_SECRET`
+
+**Note:** Music recommendations are optional. If Spotify credentials are not configured, thoughts will still be planted without music.

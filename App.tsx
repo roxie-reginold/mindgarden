@@ -7,6 +7,7 @@ import { ReflectionModal } from './components/ReflectionModal';
 import { AppView, ThoughtCard, ThoughtCategory, Position } from './types';
 import { generateMindGardenContent, waterMindGardenThought } from './services/geminiService';
 import { saveThought, getThoughts, deleteThought } from './services/storageService';
+import { searchTrack } from './services/spotifyService';
 import { Toaster, toast } from 'react-hot-toast';
 import { Key } from 'lucide-react';
 
@@ -133,10 +134,27 @@ const App: React.FC = () => {
     const loadingToast = toast.loading('The soil is listening...');
     
     try {
+      const { songSuggestion, ...content } = await generateMindGardenContent(text);
+      const position = getPositionForCategory(content.meta.category);
       const content = await generateMindGardenContent(text);
       
       // Calculate position based on next available slot
       const position = getNextAvailablePosition(gardenThoughts);
+      
+      // Try to fetch music recommendation from Spotify (non-blocking)
+      let musicRecommendation = undefined;
+      try {
+        if (songSuggestion?.query) {
+          toast.loading('Finding your song...', { id: loadingToast });
+          musicRecommendation = await searchTrack(
+            songSuggestion.query,
+            songSuggestion.reasoning
+          );
+        }
+      } catch (musicError) {
+        // Silently fail - thought still gets planted without music
+        console.warn('Failed to fetch music:', musicError);
+      }
       
       const newCard: ThoughtCard = {
         ...content,
@@ -146,7 +164,8 @@ const App: React.FC = () => {
         position,
         hasViewed: false,
         growthStage: 'seed',
-        updates: []
+        updates: [],
+        music: musicRecommendation || undefined
       };
 
       await saveThought(newCard);

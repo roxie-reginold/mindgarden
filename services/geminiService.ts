@@ -32,6 +32,10 @@ interface AnalysisResponse {
   topic: string;
   hasNextStep: boolean;
   nextStep: NextStep | null;
+  songSuggestion: {
+    query: string;        // Search query for Spotify
+    reasoning: string;    // Why this song fits the mood
+  };
 }
 
 interface WateringAnalysisResponse {
@@ -66,6 +70,7 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000)
   }
 }
 
+export const generateMindGardenContent = async (text: string): Promise<GeneratedContent & { songSuggestion: { query: string; reasoning: string } }> => {
 const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("API Key is missing.");
@@ -78,6 +83,15 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
   try {
     // 1. Analyze Text to get Category & Emotion
     const analysis = await analyzeTextAndReflect(text);
+    
+    // Try to generate image, but use fallback if quota exceeded
+    let imageUrl: string;
+    try {
+      imageUrl = await generateSymbolicImage(analysis.metaphors, analysis.emotion);
+    } catch (imageError: any) {
+      // Use fallback placeholder image when quota exceeded
+      console.warn("Image generation failed, using fallback:", imageError?.message);
+      imageUrl = `https://picsum.photos/500/500?blur=5&grayscale`;
     const species = SPECIES_MAP[analysis.category];
 
     // 2. Generate Initial Seed Image
@@ -102,8 +116,21 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
         hasNextStep: analysis.hasNextStep,
         nextStep: analysis.nextStep,
       },
+      songSuggestion: analysis.songSuggestion
     };
   } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    
+    // Check for quota/rate limit errors
+    if (error.status === 429 || error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error("The garden has reached its daily limit. Please try again in a few minutes or check your Gemini API quota.");
+    }
+    
+    if (error.message?.includes('overloaded') || error.status === 503) {
+       throw new Error("The garden is very busy right now. Please try again in a moment.");
+    }
+    
+    throw new Error("The garden is cloudy right now. Please try again later.");
     console.error("Gemini Error:", error);
     throw new Error("The garden is busy. Please try again.");
   }
@@ -186,6 +213,53 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
   const ai = getClient();
 
   const prompt = `
+    You are the MindGarden AI. Your goal is to be a sanctuary, not a task manager.
+    Analyze the user input: "${userText}".
+
+    CRITICAL EMOTIONAL SAFETY RULES:
+    1. No imperatives (never use "should", "must", "have to", "need to").
+    2. No clinical therapy jargon.
+    3. If intensity is 'high', hasNextStep MUST be false.
+    4. If action would increase guilt, shame, or pressure, hasNextStep MUST be false.
+
+    TASK 1: DECIDE IF A NEXT STEP EXISTS (hasNextStep)
+    - Set FALSE if: 
+      * High intensity emotion (panic, grief, rage).
+      * User expresses exhaustion or burnout.
+      * Input is purely venting or a memory.
+    - Set TRUE if:
+      * User shows explicit intent to act ("I need to", "I want to").
+      * User is looping/stuck (needs CLARITY).
+      * Intensity is LOW/MEDIUM and a micro-step feels supportive.
+
+    TASK 2: DEFINE NEXT STEP (if hasNextStep is true)
+    Type must be one of:
+    1. "do": Smallest possible unit of progress (< 2 min). E.g. "Open the draft."
+    2. "clarify": Reduce ambiguity. E.g. "Name one thing that feels heavy."
+    3. "reflect": Internal processing. E.g. "Notice where this sits in your body."
+    
+    Constraint: Steps must be optional invitations ("Maybe...", "If you like...").
+
+    TASK 3: SONG SUGGESTION
+    Based on the emotion, intensity, and metaphors, suggest ONE song that would resonate with this mental state.
+
+    Guidelines:
+    - For high intensity/worry: Calming, ambient, or gentle instrumental
+    - For low energy: Uplifting but not overwhelming
+    - For joy/achievement: Celebratory but tasteful
+    - For sadness: Validating, melancholic, but not depressing
+    - Match metaphors when possible (e.g., "ocean" → beach sounds, "fire" → intense rhythms)
+
+    Format: 
+    - query: "{artist name} {song name}" or "{mood keyword} ambient music"
+    - reasoning: One gentle sentence explaining the connection (max 15 words)
+
+    Avoid: 
+    - Overly clinical suggestions
+    - Songs with harsh/violent themes
+    - Extremely sad/triggering music for vulnerable states
+
+    Return STRICT JSON object.
     Analyze user thought: "${userText}".
     Map to ONE category:
     - idea (creative sparks)
@@ -222,8 +296,17 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
               confidence: { type: Type.NUMBER }
             },
             nullable: true
+          },
+          songSuggestion: {
+            type: Type.OBJECT,
+            properties: {
+              query: { type: Type.STRING, description: "Spotify search query" },
+              reasoning: { type: Type.STRING, description: "Why this song fits (max 15 words)" }
+            },
+            required: ["query", "reasoning"]
           }
         },
+        required: ["category", "topic", "emotion", "intensity", "metaphors", "reflection", "hasNextStep", "songSuggestion"],
         required: ["category", "topic", "emotion", "intensity", "reflection", "hasNextStep"],
       },
     },
