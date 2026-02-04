@@ -53,7 +53,7 @@ export const PlantSprite: React.FC<PlantSpriteProps> = ({ thought, onClick }) =>
         `}>
           <img
             src={thought.imageUrl}
-            alt={thought.meta.topic}
+            alt={thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())}
             className="w-full h-full object-contain"
           />
 
@@ -63,10 +63,10 @@ export const PlantSprite: React.FC<PlantSpriteProps> = ({ thought, onClick }) =>
       </motion.div>
 
       {/* Hover Label - Topic Only */}
-      <div className="absolute -top-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-y-1 pointer-events-none z-50">
-        <div className="bg-white backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm">
-          <span className="font-serif text-stone-700 text-xs md:text-sm whitespace-nowrap">
-            {thought.meta.topic}
+      <div className="flex justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-y-1 pointer-events-none z-50 mt-1">
+        <div className="bg-white/60 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm inline-flex items-center justify-center">
+          <span className="font-serif text-stone-600/80 text-xs md:text-sm whitespace-nowrap">
+            {thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())}
           </span>
         </div>
       </div>

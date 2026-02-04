@@ -127,7 +127,7 @@ export const ListView: React.FC<ListViewProps> = ({ thoughts, onThoughtClick, on
             <div className="aspect-square bg-white relative p-4 flex items-center justify-center border-b border-stone-50">
               <img 
                 src={thought.imageUrl} 
-                alt={thought.meta.topic}
+                alt={thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())}
                 loading="lazy"
                 className="w-full h-full object-contain drop-shadow-sm transition-transform duration-500 group-hover:scale-110"
               />
@@ -144,7 +144,7 @@ export const ListView: React.FC<ListViewProps> = ({ thoughts, onThoughtClick, on
             
             <div className="p-3">
               <h3 className="font-serif font-medium text-stone-800 text-sm mb-1 truncate leading-tight">
-                {thought.meta.topic}
+                {thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())}
               </h3>
               
               <div className="flex items-center justify-between mt-2">

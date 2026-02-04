@@ -149,22 +149,22 @@ export const KonvaPlantSprite: React.FC<KonvaPlantSpriteProps> = React.memo(({ t
       {hovered && (
         <Group x={size / 2} y={-12}>
           <Rect
-            offsetX={getTextWidth(thought.meta.topic) / 2 + 10}
+            offsetX={getTextWidth(thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())) / 2 + 10}
             offsetY={10}
-            width={getTextWidth(thought.meta.topic) + 20}
+            width={getTextWidth(thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())) + 20}
             height={24}
-            fill="white"
+            fill="rgba(255,255,255,0.6)"
             cornerRadius={8}
-            shadowColor="rgba(0,0,0,0.1)"
+            shadowColor="rgba(0,0,0,0.06)"
             shadowBlur={4}
             shadowOffsetY={2}
           />
           <Text
-            text={thought.meta.topic}
+            text={thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())}
             fontSize={12}
             fontFamily="'Playfair Display', serif"
-            fill="#44403c"
-            offsetX={getTextWidth(thought.meta.topic) / 2}
+            fill="rgba(68,64,60,0.7)"
+            offsetX={getTextWidth(thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())) / 2}
             offsetY={4}
           />
         </Group>
