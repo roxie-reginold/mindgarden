@@ -159,7 +159,7 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                       <div className="mb-3">
                         <p className="text-stone-800 text-base font-medium mb-1">"{update.text}"</p>
                         <span className="text-[10px] text-stone-400 block">
-                            {new Date(update.timestamp).toLocaleDateString()}
+                            {new Date(update.timestamp).toLocaleDateString()} {new Date(update.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
 
@@ -179,7 +179,7 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                    <div className="flex items-baseline justify-between mb-2">
                      <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Original Seed</p>
                      <span className="text-[10px] text-stone-300 font-mono">
-                        {new Date(thought.createdAt).toLocaleDateString()}
+                        {new Date(thought.createdAt).toLocaleDateString()} {new Date(thought.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                      </span>
                    </div>
                    <p className="text-stone-600 italic text-base">"{thought.originalText}"</p>
