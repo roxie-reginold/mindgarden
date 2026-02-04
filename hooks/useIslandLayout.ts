@@ -5,18 +5,18 @@ import { ThoughtCard, Position } from '../types';
 export const ISLAND_SLOTS: Position[] = [
   // Left Island (Large L-Shape)
   { x: 15, y: 55 },
-  // { x: 35, y: 40 },
-  // { x: 50, y: 45 },
-  // { x: 25, y: 65 },
-  // { x: 45, y: 60 },
-  // { x: 20, y: 80 },
-  // { x: 40, y: 75 },
+  { x: 35, y: 40 },
+  { x: 50, y: 45 },
+  { x: 25, y: 65 },
+  { x: 45, y: 60 },
+  { x: 20, y: 80 },
+  { x: 40, y: 75 },
   // Right Island (Kidney Shape)
-  // { x: 75, y: 50 },
-  // { x: 90, y: 60 },
-  // { x: 65, y: 70 },
-  // { x: 85, y: 75 },
-  // { x: 75, y: 85 },
+  { x: 75, y: 50 },
+  { x: 90, y: 60 },
+  { x: 65, y: 70 },
+  { x: 85, y: 75 },
+  { x: 75, y: 85 },
 ];
 
 export const SLOTS_PER_ISLAND = ISLAND_SLOTS.length; // 12
