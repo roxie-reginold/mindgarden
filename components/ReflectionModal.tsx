@@ -150,31 +150,19 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                   </span>
                 </div>
                 
-                {/* Original Seed */}
-                <div className="pl-6 border-l-2 border-stone-100 ml-2 mb-8 relative">
-                   <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-stone-200 border-2 border-white box-content" />
-                   <div className="flex items-baseline justify-between mb-2">
-                     <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Original Seed</p>
-                     <span className="text-[10px] text-stone-300 font-mono">
-                        {new Date(thought.createdAt).toLocaleDateString()}
-                     </span>
-                   </div>
-                   <p className="text-stone-600 italic text-base">"{thought.originalText}"</p>
-                </div>
-
-                {/* Updates */}
-                <div className="space-y-8">
+                {/* Updates (newest first) */}
+                <div className="space-y-8 mb-8">
                   {thought.updates?.map((update) => (
                     <div key={update.id} className="pl-6 border-l-2 border-amber-200 ml-2 relative">
-                      <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-amber-300 border-2 border-white box-content shadow-sm" />
-                      
+                      <div className="absolute -left-[6px] top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-300 border-2 border-white box-content shadow-sm" />
+
                       <div className="mb-3">
                         <p className="text-stone-800 text-base font-medium mb-1">"{update.text}"</p>
                         <span className="text-[10px] text-stone-400 block">
-                            {new Date(update.timestamp).toLocaleDateString()}
+                            {new Date(update.timestamp).toLocaleDateString()} {new Date(update.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      
+
                       {/* AI Acknowledgment Bubble */}
                       <div className="bg-stone-50 p-4 rounded-xl text-sm text-stone-600 font-serif italic relative">
                         {/* Triangle pointer */}
@@ -185,8 +173,20 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                   ))}
                 </div>
 
+                {/* Original Seed (at the bottom) */}
+                <div className="pl-6 border-l-2 border-stone-100 ml-2 relative">
+                   <div className="absolute -left-[5px] top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-stone-200 border-2 border-white box-content" />
+                   <div className="flex items-baseline justify-between mb-2">
+                     <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Original Seed</p>
+                     <span className="text-[10px] text-stone-300 font-mono">
+                        {new Date(thought.createdAt).toLocaleDateString()} {new Date(thought.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                     </span>
+                   </div>
+                   <p className="text-stone-600 italic text-base">"{thought.originalText}"</p>
+                </div>
+
                 {/* Watering Form */}
-                {onWater && thought.growthStage !== 'fruit' && (
+                {onWater && (
                   <form onSubmit={handleWaterSubmit} className="mt-10 relative group">
                     <input
                       type="text"
@@ -207,8 +207,8 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                 )}
                 
                 {thought.growthStage === 'fruit' && (
-                  <div className="mt-8 text-center p-6 bg-amber-50/50 rounded-2xl border border-amber-100/50 text-amber-800/60 text-sm font-serif italic">
-                    This thought has borne fruit. It is safe to rest now.
+                  <div className="mt-8 text-center p-4 bg-amber-50/50 rounded-2xl border border-amber-100/50 text-amber-800/60 text-sm font-serif italic">
+                    This thought has borne fruit — but you can always keep watering it.
                   </div>
                 )}
             </div>

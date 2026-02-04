@@ -8,15 +8,6 @@ const API_TIMEOUT_MS = 25000; // Increased timeout for potential double-generati
 
 // --- VISUAL SYSTEM DEFINITIONS ---
 
-const SPECIES_MAP: Record<ThoughtCategory, string> = {
-  idea: "Sunflower",
-  todo: "Aloe Vera",
-  worry: "Lavender plant",
-  feeling: "Wild Rose bush",
-  goal: "Oak Tree sapling",
-  memory: "Forget-me-not flowers",
-  other: "Dandelion"
-};
 
 const STAGE_DESCRIPTIONS: Record<GrowthStage, string> = {
   seed: "a small seed planted in rich soil, waiting to grow",
@@ -102,12 +93,11 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
   try {
     // 1. Analyze Text to get Category & Emotion
     const analysis = await analyzeTextAndReflect(text);
-    const species = SPECIES_MAP[analysis.category];
 
     // 2. Generate Initial Seed Image
     let imageUrl = "";
     try {
-      imageUrl = await generateBotanyImage(species, 'seed', analysis.emotion);
+      imageUrl = await generateBotanyImage('seed', analysis.emotion);
     } catch (imgError) {
       console.warn("Image gen failed:", imgError);
       imageUrl = `https://picsum.photos/seed/${Date.now()}/800/800?blur=8`;
@@ -120,7 +110,7 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
         emotion: analysis.emotion,
         intensity: analysis.intensity,
         metaphors: [], // Deprecated but kept for type safety
-        plantSpecies: species,
+        plantSpecies: '',
         category: analysis.category,
         topic: analysis.topic,
         hasNextStep: analysis.hasNextStep,
@@ -146,20 +136,24 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
 
 export const waterMindGardenThought = async (thought: ThoughtCard, updateText: string): Promise<WateringResponse> => {
   const ai = getClient();
-  const currentSpecies = thought.meta.plantSpecies || SPECIES_MAP[thought.meta.category] || "Plant";
 
   // 1. Analyze the update (Text)
+  const stageOrder: GrowthStage[] = ['seed', 'sprout', 'bloom', 'fruit'];
+  const currentIndex = stageOrder.indexOf(thought.growthStage);
+  const nextStage = currentIndex < stageOrder.length - 1 ? stageOrder[currentIndex + 1] : thought.growthStage;
+
   const prompt = `
     You are the MindGarden AI.
     Original: "${thought.originalText}"
     Current Stage: ${thought.growthStage}
+    Number of updates so far: ${thought.updates?.length ?? 0}
     Update: "${updateText}"
 
     Rules:
-    - Determine new growth stage (seed->sprout->bloom->fruit).
-    - If user reflects deeply or takes action, ADVANCE stage.
-    - If user is just venting or stuck, STAY same stage.
-    - Write a gentle acknowledgment.
+    ${thought.growthStage !== 'fruit'
+      ? `- The plant MUST advance to the next growth stage: "${nextStage}".\n    - newStage MUST be "${nextStage}".`
+      : `- The plant is already fully grown (fruit stage). Keep newStage as "fruit".`}
+    - Write a gentle acknowledgment of the user's update.
     - Determine if next step is needed.
   `;
 
@@ -191,20 +185,39 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
 
   if (!response.text) throw new Error("Failed to water plant.");
   const result = JSON.parse(response.text) as WateringAnalysisResponse;
-  
-  // 2. If stage advanced, regenerate image
+
+  console.log("[Water] AI response:", { currentStage: thought.growthStage, newStage: result.newStage, expectedNext: nextStage });
+
+  // Force stage advancement if AI didn't comply
+  if (result.newStage === thought.growthStage && thought.growthStage !== 'fruit') {
+    console.warn("[Water] AI did not advance stage, forcing to:", nextStage);
+    result.newStage = nextStage;
+  }
+
+  // 2. Regenerate image for the new stage
   let newImageUrl: string | undefined = undefined;
-  
+
   if (result.newStage !== thought.growthStage) {
+    // Try with reference image first, fall back to without
     try {
+      console.log("[Water] Generating new image for stage:", result.newStage, "with reference:", !!thought.imageUrl);
       newImageUrl = await generateBotanyImage(
-        currentSpecies, 
-        result.newStage, 
-        thought.meta.emotion // Keep original emotion or maybe infer new one? Let's keep consistency.
+        result.newStage,
+        thought.meta.emotion,
+        thought.imageUrl
       );
+      console.log("[Water] Image generated successfully, length:", newImageUrl?.length);
     } catch (e) {
-      console.warn("Failed to regenerate image on growth:", e);
-      // Fail gracefully, keep old image
+      console.warn("[Water] Image gen with reference failed, retrying without reference:", e);
+      try {
+        newImageUrl = await generateBotanyImage(
+          result.newStage,
+          thought.meta.emotion
+        );
+        console.log("[Water] Fallback image generated successfully");
+      } catch (e2) {
+        console.error("[Water] Image gen fully failed:", e2);
+      }
     }
   }
 
@@ -325,29 +338,30 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
   return res;
 }
 
-async function generateBotanyImage(species: string, stage: GrowthStage, emotion: string): Promise<string> {
+async function generateBotanyImage(stage: GrowthStage, emotion: string, referenceImageUrl?: string): Promise<string> {
   const ai = getClient();
   const stageDesc = STAGE_DESCRIPTIONS[stage];
 
+  const isEvolution = !!referenceImageUrl;
+
   // STRICT PROMPT TEMPLATE
   const imagePrompt = `
-    Create a high-quality digital plant illustration suitable for a UI garden.
-
-    Subject:
-    - A ${species} plant.
+    ${isEvolution
+      ? `Evolve the provided reference plant image into its next growth stage. The new image MUST look like a natural progression of the same plant — preserve the exact same color palette, art style, shape language, and viewing angle. Only change what reflects the new growth stage.`
+      : `Create a high-quality digital plant illustration suitable for a UI garden.`}
 
     Growth State:
-    - ${stageDesc} (same plant species, clearly growing, not changing identity).
+    - ${stageDesc} (clearly growing, not changing identity).
 
     Style:
     - Clean, modern digital illustration.
     - Soft vector-like shapes with smooth edges.
-    - Subtle gradients for depth (very light, no harsh contrast).
+    - Flat colors with minimal gradients (very subtle, no harsh contrast).
     - Matte finish, no texture noise.
     - Calm, minimal, friendly style.
 
     Color Palette:
-    - Base colors aligned with the app’s soft, natural theme.
+    - Base colors aligned with the app's soft, natural theme.
     - Emotion (${emotion}) influences tint only:
       - calm → cool green / blue undertones
       - anxious → muted, slightly desaturated tones
@@ -367,12 +381,34 @@ async function generateBotanyImage(species: string, stage: GrowthStage, emotion:
     - NO frames
     - NO shadows or drop shadows beneath the plant
     - NO ground shadow, cast shadow, or ambient occlusion
+    - NO shading on the plant itself — no dark gradients, no light/dark sides, no volumetric shading
     - NO background scenery (no soil, sky, pots)
+    - Fully flat-lit appearance, as if there is no light source
   `;
+
+  // Build content parts: text prompt + optional reference image
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: imagePrompt }];
+
+  if (referenceImageUrl) {
+    try {
+      // Extract base64 data from data URI
+      const match = referenceImageUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+      if (match) {
+        parts.unshift({
+          inlineData: {
+            mimeType: match[1],
+            data: match[2]
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to attach reference image, generating without continuity:", e);
+    }
+  }
 
   const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
     model: IMAGE_MODEL,
-    contents: { parts: [{ text: imagePrompt }] },
+    contents: { parts },
     config: {
       imageConfig: {
         aspectRatio: "1:1",
