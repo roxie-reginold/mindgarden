@@ -110,13 +110,10 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                     <p className="text-xl md:text-2xl font-serif text-stone-800 italic leading-relaxed mb-4">
                        "{thought.reflection}"
                     </p>
-                    {/* Meta Tags */}
+                    {/* Category Tag */}
                     <div className="flex flex-wrap justify-center md:justify-start gap-3 items-center">
                         <span className="px-2 py-0.5 bg-stone-100 rounded-full text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                          {thought.meta.topic}
-                        </span>
-                        <span className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">
-                           {thought.meta.emotion}
+                          {thought.meta.category}
                         </span>
                     </div>
                 </div>
