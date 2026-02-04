@@ -10,6 +10,7 @@ import { saveThought, getThoughts, deleteThought } from './services/storageServi
 import { searchTrack } from './services/spotifyService';
 import { Toaster, toast } from 'react-hot-toast';
 import { Key } from 'lucide-react';
+import { getNextAvailableSlot, slotToPosition, SLOTS_PER_ISLAND } from './hooks/useIslandLayout';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.GARDEN);
@@ -17,6 +18,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedThought, setSelectedThought] = useState<ThoughtCard | null>(null);
   const [gardenThoughts, setGardenThoughts] = useState<ThoughtCard[]>([]);
+  const [islandCount, setIslandCount] = useState(1);
   const [hasApiKey, setHasApiKey] = useState(false);
 
   // Check for API Key
@@ -63,70 +65,39 @@ const App: React.FC = () => {
   };
 
   // --- SLOT LOGIC FOR ORGANIC PLACEMENT ---
-  
-  // Tuned coordinates for the "Two Islands" image (3:2 Aspect Ratio)
-  // Left Island: x 5-55%
-  // Right Island: x 60-95%
-  const ISLAND_SLOTS = [
-    // --- Left Island (Large L-Shape) ---
-    { x: 15, y: 55 }, // Top-left tip
-    { x: 35, y: 40 }, // Top-center (back)
-    { x: 50, y: 45 }, // Top-right tip of left island
-    { x: 25, y: 65 }, // Mid-left
-    { x: 45, y: 60 }, // Mid-right (near path)
-    { x: 20, y: 80 }, // Bottom-left lobe
-    { x: 40, y: 75 }, // Bottom-center
-    
-    // --- Right Island (Kidney Shape) ---
-    { x: 75, y: 50 }, // Top-center
-    { x: 90, y: 60 }, // Top-right lobe
-    { x: 65, y: 70 }, // Left edge
-    { x: 85, y: 75 }, // Right edge
-    { x: 75, y: 85 }, // Bottom tip
-  ];
+  // Slot definitions now live in hooks/useIslandLayout.ts (shared with GardenCanvas).
+  // islandCount is expanded automatically when all slots are full.
+
+  // Sync islandCount to match the actual number of islands needed.
+  // Grows when thoughts land on higher islands, shrinks when deletions
+  // leave upper islands empty.
+  useEffect(() => {
+    if (gardenThoughts.length === 0) {
+      setIslandCount(1);
+      return;
+    }
+    const maxIsland = gardenThoughts.reduce(
+      (max, t) => Math.max(max, Math.floor(t.position.x / 100)),
+      0
+    );
+    setIslandCount(maxIsland + 1);
+  }, [gardenThoughts]);
 
   const getNextAvailablePosition = (currentThoughts: ThoughtCard[]): Position => {
-    // We want to fill gaps if thoughts were deleted, or append.
-    // Let's iterate through all possible slot indices (0 to infinity)
-    // and find the first one that isn't occupied.
-    
-    // Create a set of occupied "Global Indices"
-    // Global Index = islandIndex * slotsPerIsland + localSlotIndex
-    const occupiedIndices = new Set<number>();
-    const SLOTS_PER_ISLAND = ISLAND_SLOTS.length;
+    let currentCount = islandCount;
 
-    currentThoughts.forEach(t => {
-      // Reverse engineer the index from the position
-      const islandIndex = Math.floor(t.position.x / 100);
-      const localX = t.position.x % 100;
-      const localY = t.position.y;
-      
-      // Find which slot this corresponds to (with tolerance for float math)
-      const slotIndex = ISLAND_SLOTS.findIndex(slot => 
-        Math.abs(slot.x - localX) < 1 && Math.abs(slot.y - localY) < 1
-      );
-      
-      if (slotIndex !== -1) {
-        const globalIndex = islandIndex * SLOTS_PER_ISLAND + slotIndex;
-        occupiedIndices.add(globalIndex);
-      }
-    });
+    // Try to find a free slot within the current island count
+    let slot = getNextAvailableSlot(currentThoughts, currentCount);
 
-    // Find first free index
-    let i = 0;
-    while (occupiedIndices.has(i)) {
-      i++;
+    if (!slot) {
+      // All islands full — expand by adding one more island
+      currentCount += 1;
+      setIslandCount(currentCount);
+      slot = getNextAvailableSlot(currentThoughts, currentCount);
     }
 
-    // Convert free index back to position
-    const islandIndex = Math.floor(i / SLOTS_PER_ISLAND);
-    const localSlotIndex = i % SLOTS_PER_ISLAND;
-    const slot = ISLAND_SLOTS[localSlotIndex];
-
-    return {
-      x: (islandIndex * 100) + slot.x,
-      y: slot.y
-    };
+    // slot is guaranteed non-null now (new island has 12 free slots)
+    return slotToPosition(slot!);
   };
 
   const handlePlant = async (text: string) => {
@@ -278,8 +249,9 @@ const App: React.FC = () => {
       
       <main className="pt-16 h-screen">
         {view === AppView.GARDEN && (
-          <GardenCanvas 
+          <GardenCanvas
             thoughts={gardenThoughts}
+            islandCount={islandCount}
             onPlantClick={setSelectedThought}
             onNewThoughtClick={() => setIsPlanting(true)}
           />
