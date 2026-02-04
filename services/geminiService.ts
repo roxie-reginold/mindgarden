@@ -8,15 +8,6 @@ const API_TIMEOUT_MS = 25000; // Increased timeout for potential double-generati
 
 // --- VISUAL SYSTEM DEFINITIONS ---
 
-const SPECIES_MAP: Record<ThoughtCategory, string> = {
-  idea: "Sunflower",
-  todo: "Aloe Vera",
-  worry: "Lavender plant",
-  feeling: "Wild Rose bush",
-  goal: "Oak Tree sapling",
-  memory: "Forget-me-not flowers",
-  other: "Dandelion"
-};
 
 const STAGE_DESCRIPTIONS: Record<GrowthStage, string> = {
   seed: "a small seed planted in rich soil, waiting to grow",
@@ -102,12 +93,11 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
   try {
     // 1. Analyze Text to get Category & Emotion
     const analysis = await analyzeTextAndReflect(text);
-    const species = SPECIES_MAP[analysis.category];
 
     // 2. Generate Initial Seed Image
     let imageUrl = "";
     try {
-      imageUrl = await generateBotanyImage(species, 'seed', analysis.emotion);
+      imageUrl = await generateBotanyImage('seed', analysis.emotion);
     } catch (imgError) {
       console.warn("Image gen failed:", imgError);
       imageUrl = `https://picsum.photos/seed/${Date.now()}/800/800?blur=8`;
@@ -120,7 +110,7 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
         emotion: analysis.emotion,
         intensity: analysis.intensity,
         metaphors: [], // Deprecated but kept for type safety
-        plantSpecies: species,
+        plantSpecies: '',
         category: analysis.category,
         topic: analysis.topic,
         hasNextStep: analysis.hasNextStep,
@@ -146,7 +136,6 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
 
 export const waterMindGardenThought = async (thought: ThoughtCard, updateText: string): Promise<WateringResponse> => {
   const ai = getClient();
-  const currentSpecies = thought.meta.plantSpecies || SPECIES_MAP[thought.meta.category] || "Plant";
 
   // 1. Analyze the update (Text)
   const stageOrder: GrowthStage[] = ['seed', 'sprout', 'bloom', 'fruit'];
@@ -213,7 +202,6 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
     try {
       console.log("[Water] Generating new image for stage:", result.newStage, "with reference:", !!thought.imageUrl);
       newImageUrl = await generateBotanyImage(
-        currentSpecies,
         result.newStage,
         thought.meta.emotion,
         thought.imageUrl
@@ -223,7 +211,6 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
       console.warn("[Water] Image gen with reference failed, retrying without reference:", e);
       try {
         newImageUrl = await generateBotanyImage(
-          currentSpecies,
           result.newStage,
           thought.meta.emotion
         );
@@ -351,7 +338,7 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
   return res;
 }
 
-async function generateBotanyImage(species: string, stage: GrowthStage, emotion: string, referenceImageUrl?: string): Promise<string> {
+async function generateBotanyImage(stage: GrowthStage, emotion: string, referenceImageUrl?: string): Promise<string> {
   const ai = getClient();
   const stageDesc = STAGE_DESCRIPTIONS[stage];
 
@@ -360,14 +347,11 @@ async function generateBotanyImage(species: string, stage: GrowthStage, emotion:
   // STRICT PROMPT TEMPLATE
   const imagePrompt = `
     ${isEvolution
-      ? `Evolve the provided reference plant image into its next growth stage. The new image MUST look like a natural progression of the same plant — preserve the exact same species, color palette, art style, shape language, and viewing angle. Only change what reflects the new growth stage.`
+      ? `Evolve the provided reference plant image into its next growth stage. The new image MUST look like a natural progression of the same plant — preserve the exact same color palette, art style, shape language, and viewing angle. Only change what reflects the new growth stage.`
       : `Create a high-quality digital plant illustration suitable for a UI garden.`}
 
-    Subject:
-    - A ${species} plant.
-
     Growth State:
-    - ${stageDesc} (same plant species, clearly growing, not changing identity).
+    - ${stageDesc} (clearly growing, not changing identity).
 
     Style:
     - Clean, modern digital illustration.
