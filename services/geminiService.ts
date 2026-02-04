@@ -157,11 +157,13 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
     You are the MindGarden AI.
     Original: "${thought.originalText}"
     Current Stage: ${thought.growthStage}
+    Number of updates so far: ${thought.updates?.length ?? 0}
     Update: "${updateText}"
 
     Rules:
-    - The plant MUST advance to the next growth stage: "${nextStage}".
-    - newStage MUST be "${nextStage}".
+    ${thought.growthStage !== 'fruit'
+      ? `- The plant MUST advance to the next growth stage: "${nextStage}".\n    - newStage MUST be "${nextStage}".`
+      : `- The plant is already fully grown (fruit stage). Keep newStage as "fruit".`}
     - Write a gentle acknowledgment of the user's update.
     - Determine if next step is needed.
   `;

@@ -189,7 +189,7 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                 </div>
 
                 {/* Watering Form */}
-                {onWater && thought.growthStage !== 'fruit' && (
+                {onWater && (
                   <form onSubmit={handleWaterSubmit} className="mt-10 relative group">
                     <input
                       type="text"
@@ -210,8 +210,8 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                 )}
                 
                 {thought.growthStage === 'fruit' && (
-                  <div className="mt-8 text-center p-6 bg-amber-50/50 rounded-2xl border border-amber-100/50 text-amber-800/60 text-sm font-serif italic">
-                    This thought has borne fruit. It is safe to rest now.
+                  <div className="mt-8 text-center p-4 bg-amber-50/50 rounded-2xl border border-amber-100/50 text-amber-800/60 text-sm font-serif italic">
+                    This thought has borne fruit — but you can always keep watering it.
                   </div>
                 )}
             </div>
