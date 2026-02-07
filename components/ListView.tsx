@@ -9,7 +9,7 @@ interface ListViewProps {
   onDelete: (id: string) => void;
 }
 
-const CATEGORIES: ThoughtCategory[] = ['idea', 'todo', 'worry', 'feeling', 'goal', 'memory'];
+const CATEGORIES: ThoughtCategory[] = ['idea', 'todo', 'feeling', 'goal', 'memory'];
 const CATEGORY_OPTIONS: { value: ThoughtCategory | 'all'; label: string }[] = [
   { value: 'all', label: 'All Categories' },
   ...CATEGORIES.map(c => ({ value: c as ThoughtCategory, label: c.charAt(0).toUpperCase() + c.slice(1) })),

@@ -206,9 +206,9 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
                   </form>
                 )}
                 
-                {thought.growthStage === 'fruit' && (
+                {thought.growthStage === 'mature' && (
                   <div className="mt-8 text-center p-4 bg-amber-50/50 rounded-2xl border border-amber-100/50 text-amber-800/60 text-sm font-serif italic">
-                    This thought has borne fruit — but you can always keep watering it.
+                    This thought has fully matured — but you can always keep watering it.
                   </div>
                 )}
             </div>

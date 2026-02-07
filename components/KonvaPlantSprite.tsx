@@ -46,7 +46,7 @@ function getPlantSize(stage: string): number {
     case 'seed': return 64;
     case 'sprout': return 96;
     case 'bloom': return 128;
-    case 'fruit': return 160;
+    case 'mature': return 160;
     default: return 96;
   }
 }

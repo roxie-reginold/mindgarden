@@ -1,8 +1,8 @@
-export type ThoughtCategory = 'idea' | 'todo' | 'worry' | 'feeling' | 'goal' | 'memory' | 'other';
+export type ThoughtCategory = 'idea' | 'todo' | 'feeling' | 'goal' | 'memory';
 
 export type NextStepType = 'do' | 'clarify' | 'reflect';
 
-export type GrowthStage = 'seed' | 'sprout' | 'bloom' | 'fruit';
+export type GrowthStage = 'seed' | 'sprout' | 'bloom' | 'mature';
 
 export interface NextStep {
   text: string;

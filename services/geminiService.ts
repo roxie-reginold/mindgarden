@@ -8,12 +8,52 @@ const API_TIMEOUT_MS = 25000; // Increased timeout for potential double-generati
 
 // --- VISUAL SYSTEM DEFINITIONS ---
 
-
-const STAGE_DESCRIPTIONS: Record<GrowthStage, string> = {
-  seed: "a small seed planted in rich soil, waiting to grow",
-  sprout: "a small, tender green sprout just emerging from the ground",
-  bloom: "a healthy plant beginning to show buds or small flowers",
-  fruit: "a mature, fully grown plant in full bloom or bearing fruit"
+const PLANT_SPECIES: Record<ThoughtCategory, { name: string; stages: Record<GrowthStage, string> }> = {
+  todo: {
+    name: 'Daisy',
+    stages: {
+      seed: 'A tiny green bud close to the ground, barely noticeable. Simple and modest.',
+      sprout: 'A thin green stem with a few small leaves. Active but incomplete.',
+      bloom: 'A fully opened small white daisy with a bright yellow center. Clean, balanced, and clear.',
+      mature: 'The daisy remains visible but slightly faded or lowered. Colors softer.',
+    }
+  },
+  feeling: {
+    name: 'Cherry Blossom',
+    stages: {
+      seed: 'Bare branches with small, closed pink buds.',
+      sprout: 'Buds begin to open, showing soft pink petals.',
+      bloom: 'Branches covered with delicate pink cherry blossoms.',
+      mature: 'Petals gently falling through the air, leaving light branches behind.',
+    }
+  },
+  goal: {
+    name: 'Sunflower',
+    stages: {
+      seed: 'A small shoot emerging from the soil, sturdy and upright.',
+      sprout: 'A tall, strong green stem growing upward with broad leaves.',
+      bloom: 'A large sunflower fully open, with a bright yellow face and dark center.',
+      mature: 'The sunflower slightly tilts downward, seeds fully formed.',
+    }
+  },
+  memory: {
+    name: 'Bluebell',
+    stages: {
+      seed: 'A bulb beneath the soil, barely visible.',
+      sprout: 'Long, narrow green leaves rise gently from the ground.',
+      bloom: 'A curved stem with small, bell-shaped blue flowers hanging downward.',
+      mature: 'The flowers remain but with softened color and reduced contrast.',
+    }
+  },
+  idea: {
+    name: 'Tulip',
+    stages: {
+      seed: 'A bulb hidden beneath the soil.',
+      sprout: 'Two thick, smooth green leaves emerge symmetrically.',
+      bloom: 'A fully opened tulip with a clean, well-defined silhouette.',
+      mature: 'The tulip maintains its form with minimal movement or change.',
+    }
+  },
 };
 
 interface AnalysisResponse {
@@ -97,7 +137,7 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
     // 2. Generate Initial Seed Image
     let imageUrl = "";
     try {
-      imageUrl = await generateBotanyImage('seed', analysis.emotion);
+      imageUrl = await generateBotanyImage('seed', analysis.emotion, analysis.category);
     } catch (imgError) {
       console.warn("Image gen failed:", imgError);
       imageUrl = `https://picsum.photos/seed/${Date.now()}/800/800?blur=8`;
@@ -110,7 +150,7 @@ export const generateMindGardenContent = async (text: string): Promise<Generated
         emotion: analysis.emotion,
         intensity: analysis.intensity,
         metaphors: [], // Deprecated but kept for type safety
-        plantSpecies: '',
+        plantSpecies: PLANT_SPECIES[analysis.category]?.name ?? '',
         category: analysis.category,
         topic: analysis.topic,
         hasNextStep: analysis.hasNextStep,
@@ -138,7 +178,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
   const ai = getClient();
 
   // 1. Analyze the update (Text)
-  const stageOrder: GrowthStage[] = ['seed', 'sprout', 'bloom', 'fruit'];
+  const stageOrder: GrowthStage[] = ['seed', 'sprout', 'bloom', 'mature'];
   const currentIndex = stageOrder.indexOf(thought.growthStage);
   const nextStage = currentIndex < stageOrder.length - 1 ? stageOrder[currentIndex + 1] : thought.growthStage;
 
@@ -150,9 +190,9 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
     Update: "${updateText}"
 
     Rules:
-    ${thought.growthStage !== 'fruit'
+    ${thought.growthStage !== 'mature'
       ? `- The plant MUST advance to the next growth stage: "${nextStage}".\n    - newStage MUST be "${nextStage}".`
-      : `- The plant is already fully grown (fruit stage). Keep newStage as "fruit".`}
+      : `- The plant is already fully grown (mature stage). Keep newStage as "mature".`}
     - Write a gentle acknowledgment of the user's update.
     - Determine if next step is needed.
   `;
@@ -166,7 +206,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
         type: Type.OBJECT,
         properties: {
           acknowledgment: { type: Type.STRING },
-          newStage: { type: Type.STRING, enum: ["seed", "sprout", "bloom", "fruit"] },
+          newStage: { type: Type.STRING, enum: ["seed", "sprout", "bloom", "mature"] },
           hasNextStep: { type: Type.BOOLEAN },
           nextStep: {
             type: Type.OBJECT,
@@ -189,7 +229,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
   console.log("[Water] AI response:", { currentStage: thought.growthStage, newStage: result.newStage, expectedNext: nextStage });
 
   // Force stage advancement if AI didn't comply
-  if (result.newStage === thought.growthStage && thought.growthStage !== 'fruit') {
+  if (result.newStage === thought.growthStage && thought.growthStage !== 'mature') {
     console.warn("[Water] AI did not advance stage, forcing to:", nextStage);
     result.newStage = nextStage;
   }
@@ -204,6 +244,7 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
       newImageUrl = await generateBotanyImage(
         result.newStage,
         thought.meta.emotion,
+        thought.meta.category,
         thought.imageUrl
       );
       console.log("[Water] Image generated successfully, length:", newImageUrl?.length);
@@ -212,7 +253,8 @@ export const waterMindGardenThought = async (thought: ThoughtCard, updateText: s
       try {
         newImageUrl = await generateBotanyImage(
           result.newStage,
-          thought.meta.emotion
+          thought.meta.emotion,
+          thought.meta.category
         );
         console.log("[Water] Fallback image generated successfully");
       } catch (e2) {
@@ -265,7 +307,7 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
     Based on the emotion, intensity, and metaphors, suggest ONE song that would resonate with this mental state.
 
     Guidelines:
-    - For high intensity/worry: Calming, ambient, or gentle instrumental
+    - For high intensity: Calming, ambient, or gentle instrumental
     - For low energy: Uplifting but not overwhelming
     - For joy/achievement: Celebratory but tasteful
     - For sadness: Validating, melancholic, but not depressing
@@ -283,13 +325,11 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
     Return STRICT JSON object.
     Analyze user thought: "${userText}".
     Map to ONE category:
-    - idea (creative sparks)
-    - todo (tasks)
-    - worry (anxiety)
-    - feeling (emotions)
-    - goal (aspirations)
-    - memory (past)
-    - other
+    - idea (creative sparks, structured thoughts)
+    - todo (tasks, daily actions)
+    - feeling (emotions, sensitivity)
+    - goal (aspirations, long-term effort)
+    - memory (remembrance, past experiences)
 
     Provide a gentle reflection.
     Return JSON.
@@ -303,7 +343,7 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          category: { type: Type.STRING, enum: ["idea", "todo", "worry", "feeling", "goal", "memory", "other"] },
+          category: { type: Type.STRING, enum: ["idea", "todo", "feeling", "goal", "memory"] },
           topic: { type: Type.STRING },
           emotion: { type: Type.STRING },
           intensity: { type: Type.STRING, enum: ["low", "medium", "high"] },
@@ -338,27 +378,29 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
   return res;
 }
 
-async function generateBotanyImage(stage: GrowthStage, emotion: string, referenceImageUrl?: string): Promise<string> {
+async function generateBotanyImage(stage: GrowthStage, emotion: string, category: ThoughtCategory, referenceImageUrl?: string): Promise<string> {
   const ai = getClient();
-  const stageDesc = STAGE_DESCRIPTIONS[stage];
+  const species = PLANT_SPECIES[category];
+  const stageDesc = species?.stages[stage] ?? 'A small plant in a garden.';
+  const speciesName = species?.name ?? 'Plant';
 
   const isEvolution = !!referenceImageUrl;
 
   // STRICT PROMPT TEMPLATE
   const imagePrompt = `
     ${isEvolution
-      ? `Evolve the provided reference plant image into its next growth stage. The new image MUST look like a natural progression of the same plant — preserve the exact same color palette, art style, shape language, and viewing angle. Only change what reflects the new growth stage.`
-      : `Create a high-quality digital plant illustration suitable for a UI garden.`}
+      ? `Evolve the provided reference ${speciesName} image into its next growth stage. The new image MUST look like a natural progression of the same ${speciesName} — preserve the exact same color palette, art style, shape language, and viewing angle. Only change what reflects the new growth stage.`
+      : `Create a high-quality digital illustration of a ${speciesName} suitable for a UI garden.`}
 
-    Growth State:
-    - ${stageDesc} (clearly growing, not changing identity).
+    Plant: ${speciesName}
+    Growth Stage (${stage}): ${stageDesc}
 
-    Style:
-    - Clean, modern digital illustration.
-    - Soft vector-like shapes with smooth edges.
+    Visual Style:
+    - Soft, painterly illustration style with a calm, natural feel.
+    - Clean shapes with smooth edges, suitable for SVG or painterly generation.
     - Flat colors with minimal gradients (very subtle, no harsh contrast).
     - Matte finish, no texture noise.
-    - Calm, minimal, friendly style.
+    - Calm natural lighting — no harsh shadows or highlights.
 
     Color Palette:
     - Base colors aligned with the app's soft, natural theme.
@@ -369,9 +411,10 @@ async function generateBotanyImage(stage: GrowthStage, emotion: string, referenc
     - Avoid neon, avoid overly saturated colors.
 
     Composition:
-    - Centered plant, front-facing or slight angle.
+    - Centered ${speciesName}, front-facing or slight angle.
     - Isolated on a TRANSPARENT BACKGROUND (alpha channel).
     - Clear silhouette for easy placement.
+    - Minimal background — no scenery, no soil, no pots.
 
     Constraints:
     - NO watercolor

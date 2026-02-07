@@ -53,7 +53,7 @@ export const PlantingModal: React.FC<PlantingModalProps> = ({
 
         <h2 className="text-2xl font-serif text-stone-800 mb-2">What's on your mind?</h2>
         <p className="text-stone-500 mb-6 text-sm">
-          Plant an idea, a worry, a todo, or a feeling. Let it grow.
+          Plant an idea, a goal, a feeling, or a memory. Let it grow.
         </p>
 
         <form onSubmit={handleSubmit}>

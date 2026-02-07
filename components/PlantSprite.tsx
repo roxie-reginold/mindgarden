@@ -15,7 +15,7 @@ export const PlantSprite: React.FC<PlantSpriteProps> = ({ thought, onClick }) =>
       case 'seed': return 'w-16 h-16 md:w-20 md:h-20';
       case 'sprout': return 'w-24 h-24 md:w-28 md:h-28';
       case 'bloom': return 'w-32 h-32 md:w-36 md:h-36';
-      case 'fruit': return 'w-40 h-40 md:w-44 md:h-44';
+      case 'mature': return 'w-40 h-40 md:w-44 md:h-44';
       default: return 'w-24 h-24 md:w-28 md:h-28';
     }
   };
