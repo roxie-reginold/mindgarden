@@ -1,22 +1,32 @@
 import { useMemo } from 'react';
 import { ThoughtCard, Position } from '../types';
 
-// 12 predefined percentage slots per island (matches App.tsx ISLAND_SLOTS)
+// Old slot positions kept for migrating existing thoughts
+const OLD_ISLAND_SLOTS: Position[] = [
+  { x: 15, y: 55 }, { x: 35, y: 40 }, { x: 50, y: 45 },
+  { x: 25, y: 65 }, { x: 45, y: 60 }, { x: 20, y: 80 },
+  { x: 40, y: 75 }, { x: 75, y: 50 }, { x: 90, y: 60 },
+  { x: 65, y: 70 }, { x: 85, y: 75 }, { x: 75, y: 85 },
+];
+
+// 12 predefined percentage slots per island (% of full SVG 1254x836)
+// Left island green surface: ~x:4-53%, y:34-65% (L-shaped)
+// Right island green surface: ~x:55-88%, y:38-72% (kidney-shaped)
 export const ISLAND_SLOTS: Position[] = [
   // Left Island (Large L-Shape)
-  { x: 15, y: 55 },
-  { x: 35, y: 40 },
-  { x: 50, y: 45 },
-  { x: 25, y: 65 },
-  { x: 45, y: 60 },
-  { x: 20, y: 80 },
-  { x: 40, y: 75 },
+  { x: 13, y: 43 },  // upper-left
+  { x: 27, y: 38 },  // upper-center
+  { x: 42, y: 42 },  // upper-right
+  { x: 22, y: 48 },  // center-left
+  { x: 35, y: 52 },  // center-right
+  { x: 12, y: 56 },  // lower-left peninsula
+  { x: 25, y: 54 },  // lower-center peninsula
   // Right Island (Kidney Shape)
-  { x: 75, y: 50 },
-  { x: 90, y: 60 },
-  { x: 65, y: 70 },
-  { x: 85, y: 75 },
-  { x: 75, y: 85 },
+  { x: 68, y: 45 },  // upper-left
+  { x: 80, y: 47 },  // upper-right
+  { x: 65, y: 58 },  // center-left
+  { x: 78, y: 56 },  // center-right
+  { x: 72, y: 65 },  // lower-center
 ];
 
 export const SLOTS_PER_ISLAND = ISLAND_SLOTS.length; // 12
@@ -50,6 +60,28 @@ export interface SlotInfo {
   globalIndex: number;
   worldX: number; // absolute pixel x in world space
   worldY: number; // absolute pixel y in world space
+}
+
+/**
+ * Migrates a position from old slot coordinates to new ones.
+ * Returns the updated position, or null if no migration needed.
+ */
+export function migratePosition(pos: Position): Position | null {
+  const islandIndex = Math.floor(pos.x / 100);
+  const localX = pos.x % 100;
+  const localY = pos.y;
+
+  const oldSlotIndex = OLD_ISLAND_SLOTS.findIndex(
+    slot => Math.abs(slot.x - localX) < 1 && Math.abs(slot.y - localY) < 1
+  );
+
+  if (oldSlotIndex === -1) return null;
+
+  const newSlot = ISLAND_SLOTS[oldSlotIndex];
+  return {
+    x: islandIndex * 100 + newSlot.x,
+    y: newSlot.y,
+  };
 }
 
 /**

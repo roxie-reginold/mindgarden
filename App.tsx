@@ -10,7 +10,7 @@ import { saveThought, getThoughts, deleteThought } from './services/storageServi
 import { searchTrack } from './services/spotifyService';
 import { Toaster, toast } from 'react-hot-toast';
 import { Key } from 'lucide-react';
-import { getNextAvailableSlot, slotToPosition, SLOTS_PER_ISLAND } from './hooks/useIslandLayout';
+import { getNextAvailableSlot, slotToPosition, migratePosition, SLOTS_PER_ISLAND } from './hooks/useIslandLayout';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.GARDEN);
@@ -48,6 +48,14 @@ const App: React.FC = () => {
   const refreshGarden = async () => {
     try {
       const thoughts = await getThoughts();
+      // Migrate any thoughts with old slot coordinates to new positions
+      for (const t of thoughts) {
+        const migrated = migratePosition(t.position);
+        if (migrated) {
+          t.position = migrated;
+          await saveThought(t);
+        }
+      }
       // Sort by creation to ensure logical timeline, though rendering depends on slot
       setGardenThoughts(thoughts.sort((a, b) => a.createdAt - b.createdAt));
     } catch (error) {
