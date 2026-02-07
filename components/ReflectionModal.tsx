@@ -81,38 +81,44 @@ export const ReflectionModal: React.FC<ReflectionModalProps> = ({
           {/* Scrollable Content */}
           <div className="overflow-y-auto overflow-x-hidden flex-1 p-8 md:p-10">
             
-            {/* Header: Phase Label */}
-            <div className="flex justify-center mb-8">
-               <span className="text-xs font-bold tracking-[0.2em] text-stone-400 uppercase">
-                 {thought.growthStage} Phase
-               </span>
-            </div>
-
-            {/* Hero Section: Image + Quote */}
+            {/* Hero Section: Image (left) + Topic/Quote (right) */}
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-10 mb-10 w-full">
-                {/* Circular Plant Image */}
-                <div className="relative group flex-shrink-0">
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-teal-100 via-amber-100 to-rose-100 blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
-                    <motion.div 
-                      layoutId={`image-${thought.id}`}
-                      className="relative w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-br from-white to-stone-50 border-[6px] border-white shadow-xl flex items-center justify-center overflow-hidden ring-1 ring-stone-100"
-                    >
-                         <img 
-                           src={thought.imageUrl} 
-                           alt={thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())}
-                           className="w-full h-full object-contain p-5 mix-blend-multiply"
-                         />
-                    </motion.div>
+                {/* Circular Plant Image + Phase Label */}
+                <div className="flex flex-col items-center flex-shrink-0">
+                    <div className="relative group">
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-teal-100 via-amber-100 to-rose-100 blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
+                        <motion.div
+                          layoutId={`image-${thought.id}`}
+                          className="relative w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-br from-white to-stone-50 border-[6px] border-white shadow-xl flex items-center justify-center overflow-hidden ring-1 ring-stone-100"
+                        >
+                             <img
+                               src={thought.imageUrl}
+                               alt={thought.meta.topic.replace(/\b\w/g, c => c.toUpperCase())}
+                               className="w-full h-full object-contain p-5 mix-blend-multiply"
+                             />
+                        </motion.div>
+                    </div>
+                    {/* Phase Label */}
+                    <span className="text-[10px] font-bold tracking-[0.2em] text-stone-300 uppercase mt-3">
+                      {thought.growthStage} Phase
+                    </span>
                 </div>
 
-                {/* Reflection Text */}
+                {/* Topic, Quote, Labels */}
                 <div className="flex-1 text-center md:text-left">
-                    <p className="text-xl md:text-2xl font-serif text-stone-800 italic leading-relaxed mb-4">
-                       "{thought.reflection}"
+                    {/* Topic Title */}
+                    <h2 className="text-2xl md:text-3xl font-semibold text-stone-800 capitalize mt-1 mb-3">
+                      {thought.meta.topic}
+                    </h2>
+
+                    {/* Reflection Quote */}
+                    <p className="text-base md:text-lg font-serif text-stone-500 italic leading-relaxed mb-4">
+                      "{thought.reflection}"
                     </p>
+
                     {/* Category Tag */}
                     <div className="flex flex-wrap justify-center md:justify-start gap-3 items-center">
-                        <span className="px-2 py-0.5 bg-stone-100 rounded-full text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                        <span className="px-2.5 py-0.5 bg-stone-100 rounded-full text-[10px] font-bold uppercase tracking-wider text-stone-400">
                           {thought.meta.category}
                         </span>
                     </div>
