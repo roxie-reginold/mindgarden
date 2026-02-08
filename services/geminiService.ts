@@ -313,16 +313,22 @@ async function analyzeTextAndReflect(userText: string): Promise<AnalysisResponse
     - "reflect": Internal processing. E.g. "Notice where this sits in your body."
     Steps must be optional invitations ("Maybe...", "If you like...").
 
-    TASK 4: SONG SUGGESTION (content + category + emotion)
+    TASK 4: SONG SUGGESTION (content + category + emotion) — WIDE RANGE REQUIRED
     Suggest ONE song using the chosen category, topic (content), and emotion. Category drives the type of music:
-    - idea: Creative, curious, exploratory (e.g., indie, ambient, thoughtful).
-    - todo: Focused, steady, unobtrusive (e.g., lo-fi, soft focus).
-    - feeling: Match and support the emotion (calming for high intensity, uplifting for low energy, validating for sadness, celebratory for joy).
-    - goal: Motivational, forward-moving, hopeful (not cheesy).
-    - memory: Nostalgic, tender, reflective; era or vibe that fits the memory.
-    Use the topic and user's words where it helps (e.g., "running 5K" → steady rhythm, determination; "grandmother" → warm, nostalgic). Respect intensity: high intensity → calming; avoid triggering music for vulnerable states.
-    Format: query: "{artist name} {song name}" or "{mood/genre} music"; reasoning: one short sentence (max 15 words) explaining why this song fits this category and this thought.
-    Avoid: Overly clinical suggestions; songs with harsh/violent themes; extremely sad/triggering music for vulnerable states.
+    - idea: Creative, curious, exploratory — vary: indie, art pop, ambient, post-rock, jazz, electronic, folk, world, different decades.
+    - todo: Focused, steady, unobtrusive — vary: lo-fi, acoustic, soft jazz, minimal piano, post-minimalist, chillhop, library music, different artists each time.
+    - feeling: Match and support the emotion — vary genres and eras (e.g. calm: not always the same artist; sad: soul, folk, classical, indie; joy: disco, afrobeats, bossa, pop; anxious: ambient, slowcore, neoclassical).
+    - goal: Motivational, forward-moving, hopeful — vary: rock, soul, folk, electronic, hip-hop, Latin, gospel-tinged, different decades and cultures.
+    - memory: Nostalgic, tender, reflective — vary by era and style (e.g. 70s soul, 80s ballads, 90s indie, 2000s, classical, folk, international).
+    Use the topic and user's words where it helps. Respect intensity: high intensity → calming; avoid triggering music for vulnerable states.
+
+    VARIETY RULES (important):
+    - Pick a SPECIFIC artist and song when possible (query: "Artist Name Song Title"); use mood/genre only when a specific track is hard to name.
+    - Vary artists, genres, decades, and cultures across suggestions. Do not default to the same few well-known picks (e.g. avoid always suggesting the same lo-fi or ambient artists).
+    - Within each category, draw from a broad pool: different subgenres, languages, and eras so suggestions feel fresh and diverse.
+
+    Format: query: "{artist name} {song name}" or "{mood/genre} music"; reasoning: one short sentence (max 15 words) explaining why this song fits.
+    Avoid: Overly clinical suggestions; songs with harsh/violent themes; extremely sad/triggering music for vulnerable states; repeating the same type of suggestion every time.
 
     Return a strict JSON object with: category, topic, emotion, intensity, reflection, hasNextStep, nextStep (or null), songSuggestion (query, reasoning).
   `;
